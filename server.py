@@ -318,18 +318,6 @@ def decrypt_dat(input_file: str | Path) -> int:
             return 0
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 app = FastAPI()
 
 # 添加 CORS 中间件
@@ -356,9 +344,9 @@ async def decrypt(file_path: str) -> Response:
 
     if not full_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    
+
     print(f"[+] 解密文件 {full_path}...")
-    
+
     version = decrypt_dat(full_path)
     print(f"[+] 加密版本: v{version}")
     match version:
@@ -370,7 +358,6 @@ async def decrypt(file_path: str) -> Response:
 
         case 2:
             data = decrypt_dat_v4(full_path, info.xor_key, info.aes_key)
-
 
     return Response(content=data, media_type="image/png")
 
@@ -396,4 +383,4 @@ if __name__ == "__main__":
     config = Config()
     config.bind = ["127.0.0.1:49152"]
     print(f"[+] 服务启动在: http://127.0.0.1:49152")
-    asyncio.run(serve(app, config))  # type: ignore
+    asyncio.run(serve(app, config))
