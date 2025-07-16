@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import ctypes
+import re
 import struct
 import sys
 import threading
@@ -199,6 +200,38 @@ def dump_wechat_info_v4(encrypted: bytes, pid: int) -> bytes:
     else:
         raise RuntimeError("未找到 AES 密钥")
 
+def sort_template_files_by_date(template_files):
+    """
+    根据文件路径中的 YYYY-MM 部分，从大到小（降序）排序文件列表。
+
+    Args:
+        template_files (list): 包含文件路径字符串的列表，例如：
+                               "{weixin_dir}/msg/attach/.../2025-06/Img/...dat"
+
+    Returns:
+        list: 按照日期从大到小排序后的文件路径列表。
+    """
+
+    def get_date_from_path(filepath):
+        """
+        从文件路径中提取 YYYY-MM 格式的日期字符串。
+        """
+        # 使用正则表达式查找形如 "YYYY-MM" 的模式
+        # r'(\d{4}-\d{2})' 匹配四个数字-两个数字，并将其捕获为一个组
+        match = re.search(r'(\d{4}-\d{2})', filepath)
+        if match:
+            return match.group(1)  # 返回捕获到的日期字符串
+        else:
+            # 如果没有找到日期模式，可以根据需要处理。
+            # 例如，返回一个非常小的字符串，使其在降序排序时排在最后，
+            # 或者抛出错误。这里假设所有路径都包含日期。
+            # print(f"警告：路径中未找到 YYYY-MM 格式的日期: {filepath}")
+            return "0000-00" # 返回一个默认值，确保排序行为可预测
+
+    # 使用 sorted() 函数进行排序，key 参数指定了用于比较的函数，
+    # reverse=True 表示降序排序（从大到小）
+    sorted_files = sorted(template_files, key=get_date_from_path, reverse=True)
+    return sorted_files
 
 def find_key(weixin_dir: Path):
     """
@@ -208,14 +241,14 @@ def find_key(weixin_dir: Path):
     print(f"[+] 读取文件, 收集密钥...")
 
     # 查找所有 _t.dat 结尾的文件
-    template_files = list(weixin_dir.rglob("*_t.dat"))[:16]
+    template_files = sort_template_files_by_date(list(weixin_dir.rglob("*_t.dat")))
 
     if not template_files:
         raise RuntimeError("未找到模板文件")
 
     # 收集所有文件最后两个字节
     last_bytes_list = []
-    for file in template_files:
+    for file in template_files[:16]:
         try:
             with open(file, "rb") as f:
                 # 读取最后两个字节
@@ -227,7 +260,7 @@ def find_key(weixin_dir: Path):
             continue
 
     if not last_bytes_list:
-        raise RuntimeError("未能成功读取任何模板文件")
+        raise RuntimeError("对于 XOR, 未能成功读取任何模板文件")
 
     # 使用 Counter 统计最常见的字节组合
     counter = Counter(last_bytes_list)
@@ -255,7 +288,7 @@ def find_key(weixin_dir: Path):
             ciphertext = f.read(16)
             break
     else:
-        raise RuntimeError("未能成功读取任何模板文件")
+        raise RuntimeError("对于 AES, 未能成功读取任何模板文件")
 
     try:
         pm = pymem.Pymem("Weixin.exe")
