@@ -145,7 +145,7 @@ dat2img -i <input_path> -o <output_path> [-v <version>] [-x <xorKey> -a <aesKey>
 
 ## 计划
 
-- [x] 实现对 `wxgf` 格式微信图片的解码支持.
+- [x] 实现对 `wxgf` 格式微信图片的解码支持. **暂时只提供 [Releases](https://github.com/recarto404/WxDatDecrypt/releases) 的分支**
 
 ## 贡献
 
