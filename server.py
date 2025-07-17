@@ -218,7 +218,7 @@ def sort_template_files_by_date(template_files):
         """
         # 使用正则表达式查找形如 "YYYY-MM" 的模式
         # r'(\d{4}-\d{2})' 匹配四个数字-两个数字，并将其捕获为一个组
-        match = re.search(r'(\d{4}-\d{2})', filepath)
+        match = re.search(r'(\d{4}-\d{2})', str(filepath))
         if match:
             return match.group(1)  # 返回捕获到的日期字符串
         else:
