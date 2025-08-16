@@ -123,29 +123,62 @@ main {
     overflow-y: auto;
     padding: 16px;
 }
+
+/* --- JS-driven Waterfall Layout Styles --- */
 #image-gallery {
-    column-gap: 16px;
-    column-count: 5; /* 默认5列 */
+    display: flex;
+    gap: 16px; /* 列之间的间距 */
+    align-items: flex-start; /* 关键：让列从顶部开始对齐 */
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 8px; /* 添加左右内边距 */
 }
-/* 响应式列数调整 */
-@media (max-width: 1920px) { #image-gallery { column-count: 4; } }
-@media (max-width: 1280px) { #image-gallery { column-count: 3; } }
-@media (max-width: 960px) { #image-gallery { column-count: 2; } }
-@media (max-width: 640px) { #image-gallery { column-count: 1; } }
+
+.image-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px; /* 图片卡片之间的垂直间距 */
+}
 
 .image-card {
-    margin-bottom: 16px;
-    break-inside: avoid-column;
     padding: 8px;
+    width: 100%; /* 填满列宽 */
+    box-sizing: border-box;
 }
+
+/* --- Lazy Loading Placeholder Styles (Unchanged) --- */
+.image-placeholder {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    background-color: var(--neutral-layer-3);
+    border-radius: var(--control-corner-radius);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: var(--neutral-foreground-rest);
+}
+
 .image-card img {
     width: 100%;
     height: auto;
     border-radius: var(--control-corner-radius);
     background-color: var(--neutral-layer-3);
+    display: block;
 }
+.image-placeholder {
+    display: none;
+}
+
+.image-card.is-loading img {
+    display: none;
+}
+.image-card.is-loading .image-placeholder {
+    display: flex;
+}
+
 .image-card .caption {
-    font-size: 14px; /* 增加图片标题字体大小 */
+    font-size: 14px;
     line-height: var(--type-ramp-minus-1-line-height);
     text-align: center;
     margin-top: 8px;

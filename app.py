@@ -140,7 +140,6 @@ class Api:
         return {"success": False}
 
     def decrypt_dat(self, file_path: str):
-        print("解密文件")
 
         # 使用全局 info 对象
         if info.weixin_dir is None:
