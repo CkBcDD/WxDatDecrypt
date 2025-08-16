@@ -210,7 +210,7 @@ if __name__ == "__main__":
     )
 
     print("PyWebview 窗口即将启动...")
-    webview.start(debug=True)
+    webview.start(debug=False)
 
     print("PyWebview 窗口已关闭。")
     # 由于服务器线程是守护线程，当主线程退出时它也会自动终止。
