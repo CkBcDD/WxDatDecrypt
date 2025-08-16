@@ -520,8 +520,6 @@
             const imageGallery = document.getElementById('image-gallery');
             const currentFolderInfo = document.getElementById('current-folder-info');
 
-            // Debugging: Check if dirTree element is correctly obtained
-            // console.log("dirTree element:", dirTree);
             if (!dirTree) {
                 console.error("Error: Could not find element with id 'dir-tree'. Tree functionality will not work.");
             }
@@ -554,16 +552,13 @@
             // --- 主页按钮：调用Python API选择文件夹 ---
             selectFolderBtn.addEventListener('click', async () => {
                 try {
-                    // console.log("selectFolderBtn clicked: Calling open_folder_dialog...");
                     const result = await window.pywebview.api.open_folder_dialog();
                     if (result && result.success) {
                         currentRootDir = result.path;
                         currentFolderInfo.textContent = `当前目录: ${currentRootDir}`;
-                        // console.log(`Folder selected: ${currentRootDir}`);
                         await loadAndRenderDirectoryTree();
                         switchView('folder');
                     } else {
-                        // console.log("Folder selection cancelled or failed.");
                     }
                 } catch (e) {
                     console.error("调用 open_folder_dialog 失败:", e);
@@ -574,9 +569,7 @@
             // --- 加载并渲染目录树 ---
             async function loadAndRenderDirectoryTree() {
                 try {
-                    // console.log("loadAndRenderDirectoryTree: Calling get_folder_tree...");
                     const treeData = await window.pywebview.api.get_folder_tree();
-                    // console.log("get_folder_tree response:", treeData);
                     if (treeData) {
                         dirTree.innerHTML = ''; // 清空旧树
                         const treeItem = createTreeNode(treeData);
@@ -587,7 +580,6 @@
                         // 确保根节点被选中。设置 'selected' 属性会触发 'item-selected' 事件，
                         // 进而调用 selectTreeNode 来加载内容。
                         treeItem.selected = true;
-                        // console.log("Root node created and selected. item-selected event should fire.");
                         // 手动调用 selectTreeNode 来加载根目录的图片，因为程序性设置 selected 不会触发 item-selected 事件
                         selectTreeNode(treeItem);
                     } else {
@@ -605,7 +597,6 @@
                 treeItem.dataset.path = nodeData.path;
                 treeItem.dataset.name = nodeData.name;
                 treeItem.textContent = nodeData.name;
-                // console.log(`Created tree node: ${nodeData.name} (Path: ${nodeData.path})`);
 
                 if (nodeData.children && nodeData.children.length > 0) {
                     nodeData.children.forEach(child => {
@@ -623,7 +614,6 @@
 
             // --- 目录树的点击事件 ---
             dirTree.addEventListener('click', e => {
-                console.log('dirTree general click event triggered', e.target);
                 const clickedItem = e.target.closest('fluent-tree-item');
                 if (!clickedItem) return;
 
@@ -664,13 +654,11 @@
 
             // --- 选中一个树节点，更新UI并加载其图片 ---
             function selectTreeNode(nodeElement) {
-                // console.log("selectTreeNode called with:", nodeElement);
                 if (!nodeElement) {
                     console.warn("selectTreeNode: nodeElement is null or undefined.");
                     return;
                 }
                 const folderPath = nodeElement.dataset.path;
-                // console.log("Folder path from nodeElement:", folderPath);
                 if (!folderPath) {
                     console.warn("selectTreeNode: folderPath is null or undefined from nodeElement.dataset.path.");
                     return;
@@ -681,7 +669,6 @@
 
             // --- 更新面包屑 ---
             function updateBreadcrumb(path) {
-                // console.log(`updateBreadcrumb: Updating for path: ${path}`);
                 breadcrumb.innerHTML = '';
                 if (!currentRootDir || !path.startsWith(currentRootDir)) {
                     console.warn("updateBreadcrumb: Path not within currentRootDir or currentRootDir is null. Displaying full path.");
@@ -714,16 +701,13 @@
 
             // --- 面包屑点击事件 ---
             breadcrumb.addEventListener('click', e => {
-                // console.log("Breadcrumb clicked:", e.target);
                 const targetItem = e.target.closest('fluent-breadcrumb-item');
                 if (targetItem && targetItem.dataset.path) {
                     const path = targetItem.dataset.path;
-                    // console.log("Breadcrumb item path:", path);
                     // 注意：这里需要转义路径中的反斜杠，因为它是用于CSS选择器
                     const pathSelector = path.replace(/\\/g, '\\\\');
                     const nodeElement = dirTree.querySelector(`fluent-tree-item[data-path="${pathSelector}"]`);
                     if (nodeElement) {
-                        // console.log("Found tree node for breadcrumb path:", nodeElement);
                         // 展开所有父节点以确保目标节点可见
                         let parent = nodeElement.parentElement;
                         while (parent && parent.tagName === 'FLUENT-TREE-ITEM') {
@@ -744,7 +728,6 @@
 
             // --- 加载并显示指定路径的图片 ---
             async function loadImages(folderPath) {
-                // console.log(`loadImages: Attempting to load images for path: ${folderPath}`);
                 imageGallery.innerHTML = '<fluent-progress-ring></fluent-progress-ring>';
                 try {
                     const relativePaths = await window.pywebview.api.get_images_in_folder(folderPath);
@@ -779,12 +762,10 @@
 
             async function fetchAndSetImage(relPath, imgElement) {
                 try {
-                    const encodedPath = encodeURIComponent(relPath);
-                    const apiUrl = API_BASE_URL + encodedPath;
-                    const response = await fetch(apiUrl);
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-                    const imageBlob = await response.blob();
+                    const base64 = await window.pywebview.api.decrypt_dat(relPath)
+                    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+                
+                    const imageBlob = new Blob([bytes], {type: "image/jpeg"});
                     const objectURL = URL.createObjectURL(imageBlob);
                     imgElement.src = objectURL;
                     imgElement.alt = relPath;
@@ -798,7 +779,6 @@
             }
 
             // --- 初始化 ---
-            // console.log("DOMContentLoaded: Initializing app...");
             switchView('home');
         });
     </script>
