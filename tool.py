@@ -184,11 +184,17 @@ def main():
             console.print("\n新密钥获取成功！", style="success")
             console.print(f"XOR: 0x{xor_key:02X}", style="success")
             console.print(f"AES: {aes_key.decode()[:16]}", style="success")
+            console.print("\n按任意键退出...", style="info")
+            os.system("pause > nul")
         else:
             console.print("警告：未获取到 AES 密钥", style="warning")
+            console.print("\n按任意键退出...", style="info")
+            os.system("pause > nul")
         
     except Exception as e:
         console.print(f"获取密钥失败: {e}", style="error")
+        console.print("\n按任意键退出...", style="info")
+        os.system("pause > nul")
 
 if __name__ == "__main__":
     freeze_support()
