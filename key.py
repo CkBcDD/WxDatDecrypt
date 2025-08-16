@@ -1,11 +1,12 @@
 import ctypes
+import json
+import os
 import re
 import threading
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from ctypes import wintypes
 from functools import lru_cache
-from multiprocessing import freeze_support
 from pathlib import Path
 from typing import Any
 
@@ -228,12 +229,13 @@ def sort_template_files_by_date(template_files):
 
 
 
-def find_key(weixin_dir: Path, xor_key_: int | None = None, aes_key_: bytes | None = None):
+def find_key(weixin_dir: Path, version: int = 4, xor_key_: int | None = None, aes_key_: bytes | None = None):
     """
     遍历目录下文件, 找到至多 16 个 (.*)_t.dat 文件,
     收集最后两位字节, 选择出现次数最多的两个字节.
     """
-    print(f"[+] 读取文件, 收集密钥...")
+    assert version in [3, 4]
+    print(f"[+] 微信 {version}, 读取文件, 收集密钥...")
 
     # 查找所有 _t.dat 结尾的文件
     template_files = sort_template_files_by_date(list(weixin_dir.rglob("*_t.dat")))
@@ -268,10 +270,15 @@ def find_key(weixin_dir: Path, xor_key_: int | None = None, aes_key_: bytes | No
         raise RuntimeError("未能找到 XOR 密钥")
     
 
-    if xor_key_ == xor_key:
-        print(f"[+] 验证成功")
-        return xor_key_, aes_key_
+    if xor_key_:
+        if xor_key_ == xor_key:
+            print(f"[+] 验证成功")
+            return xor_key_, aes_key_
+        else:
+            raise RuntimeError
 
+    if version == 3:
+        return xor_key, b"cfcd208495d565ef"
 
 
     for file in template_files:
@@ -305,3 +312,27 @@ def find_key(weixin_dir: Path, xor_key_: int | None = None, aes_key_: bytes | No
     print(f"[+] 找到 AES 密钥: {aes_key}")
 
     return xor_key, aes_key
+
+
+CONFIG_FILE = "config.json"
+
+
+def read_key_from_config() -> tuple[int, bytes]:
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as f:
+            key_dict = json.loads(f.read())
+
+        x, y = key_dict["xor"], key_dict["aes"]
+        return x, y.encode()[:16]
+
+    return 0, b""
+
+def store_key(xor_k: int, aes_k: bytes) -> None:
+    key_dict = {
+        "xor": xor_k,
+        "aes": aes_k.decode(),
+    }
+
+    with open(CONFIG_FILE, "w") as f:
+        f.write(json.dumps(key_dict))
+

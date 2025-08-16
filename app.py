@@ -14,12 +14,15 @@ CONFIG_FILE = "config.json"
 
 
 def read_key_from_config() -> tuple[int, bytes]:
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
-            key_dict = json.loads(f.read())
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r") as f:
+                key_dict = json.loads(f.read())
 
-        x, y = key_dict["xor"], key_dict["aes"]
-        return x, y.encode()[:16]
+            x, y = key_dict["xor"], key_dict["aes"]
+            return x, y.encode()[:16]
+    except:
+        return 0, b""
 
     return 0, b""
 
