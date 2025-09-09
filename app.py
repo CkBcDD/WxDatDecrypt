@@ -8,6 +8,7 @@ from pathlib import Path
 import webview
 
 from decrypt import decrypt_dat, decrypt_dat_v3, decrypt_dat_v4
+import wxam
 
 
 CONFIG_FILE = "config.json"
@@ -170,7 +171,11 @@ class Api:
             case _:
                 print(f"不支持的解密版本: {version}")
                 return ""
-
+            
+        if data.startswith(b"wxgf"):
+            print("[+] 转换 WxGF 文件...")
+            data = wxam.wxam_to_image(data)
+    
         return base64.b64encode(data).decode("utf-8")
 
 
