@@ -50,6 +50,13 @@ class Api:
         self.root_dir = None
         self.server_url = None  # 用于存储 FastAPI 服务器的 URL
 
+    def _is_valid_sns_filename(self, filename: str) -> bool:
+        """
+        检查文件名是否为朋友圈 (Sns) 缓存文件的文件名形式
+        """
+        name = filename.removesuffix("_t")
+        return len(name) in [30, 32] and name.isalnum()
+
     def set_server_url(self, url: str):
         """
         设置 FastAPI 服务器的 URL。
@@ -105,7 +112,7 @@ class Api:
         relative_paths = []
         try:
             for item in os.listdir(folder_path):
-                if item.lower().endswith(DAT_FILE_EXTENSION):
+                if item.lower().endswith(DAT_FILE_EXTENSION) or self._is_valid_sns_filename(item):
                     full_path = os.path.join(folder_path, item)
                     relative_path = os.path.relpath(full_path, self.root_dir)
                     relative_paths.append(relative_path)
