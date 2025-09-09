@@ -112,8 +112,12 @@ class Api:
         relative_paths = []
         try:
             for item in os.listdir(folder_path):
+                full_path = os.path.join(folder_path, item)
+                # 跳过文件夹
+                if os.path.isdir(full_path):
+                    continue
+                    
                 if item.lower().endswith(DAT_FILE_EXTENSION) or self._is_valid_sns_filename(item):
-                    full_path = os.path.join(folder_path, item)
                     relative_path = os.path.relpath(full_path, self.root_dir)
                     relative_paths.append(relative_path)
         except OSError as e:
