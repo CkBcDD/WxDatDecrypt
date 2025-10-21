@@ -1,12 +1,12 @@
 # 微信图片查看器
 
 > 一个用于查看和解密微信图片文件的工具
-> 
+>
 > 本项目仅供学习交流使用，**可能存在封号风险，请勿用于非法用途**，否则后果自负。
 
 ## 功能简介
 
-![程序界面预览](img/home.png)
+![程序界面预览](./docs/images/home.png)
 
 - 图形化界面，操作简单直观
 - 将微信缓存的 `.dat` 文件解密为原始图片格式。
@@ -29,13 +29,13 @@
 1. 从 [Releases](https://github.com/recarto404/WxDatDecrypt/releases) 页面下载预编译的二进制文件，或使用源代码文件。
 
 2. 首次使用前，需要先获取解密密钥：
-   - 运行 `tool.exe`（或 `tool.py`）
+   - 运行 `tool.exe`（或 `./backend/src/tool.py`）
    - 选择对应的微信版本
    - 按提示输入微信缓存目录 (例如：`C:\Users\Admin\Documents\xwechat_files\wxid_pl4c3h0ld3r222_abcd`)
-   - 程序会查找密钥, 保存至 `config.json` 文件
+   - 程序会查找密钥, 保存至 `./config.json` 文件
 
 3. 获取密钥后：
-   - 运行 `app.exe`（或 `app.py`）
+   - 运行 `app.exe`（或 `./frontend/app.py`）
    - 在程序界面中点击选择文件夹按钮，选择微信的图片缓存目录
    - 程序会自动扫描目录并显示所有可用的图片文件
    - 点击左侧目录树可以浏览不同文件夹

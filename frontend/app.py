@@ -7,25 +7,34 @@ from pathlib import Path
 
 import webview
 
-from decrypt import decrypt_dat, decrypt_dat_v3, decrypt_dat_v4
-import wxam
+from backend.src.decrypt import decrypt_dat, decrypt_dat_v3, decrypt_dat_v4
+import backend.src.wxam as wxam
 
 
 CONFIG_FILE = "config.json"
 
 
 def read_key_from_config() -> tuple[int, bytes]:
-    try:
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, "r") as f:
-                key_dict = json.loads(f.read())
-
-            x, y = key_dict["xor"], key_dict["aes"]
-            return x, y.encode()[:16]
-    except:
+    if not os.path.exists(CONFIG_FILE):
         return 0, b""
 
-    return 0, b""
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            key_dict = json.load(f)
+        xor_key = int(key_dict.get("xor", 0))
+        aes_value = key_dict.get("aes", b"")
+    except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
+        print(f"读取配置失败: {exc}")
+        return 0, b""
+
+    if isinstance(aes_value, str):
+        aes_key = aes_value.encode()
+    elif isinstance(aes_value, (bytes, bytearray)):
+        aes_key = bytes(aes_value)
+    else:
+        aes_key = b""
+
+    return xor_key, aes_key[:16]
 
 
 # 全局对象，用于保存微信文件信息，FastAPI 和主线程都可以访问
@@ -85,43 +94,50 @@ class Api:
         if not self.root_dir:
             return None
 
-        def build_tree(dir_path):
+        root_path = Path(self.root_dir)
+
+        def build_tree(dir_path: Path):
             tree_node = {
-                "name": os.path.basename(dir_path),
-                "path": dir_path,
+                "name": dir_path.name,
+                "path": str(dir_path),
                 "children": [],
             }
             try:
-                for name in os.listdir(dir_path):
-                    path = os.path.join(dir_path, name)
-                    if os.path.isdir(path):
-                        tree_node["children"].append(build_tree(path))
-            except OSError:
-                pass
+                for entry in dir_path.iterdir():
+                    if entry.is_dir():
+                        tree_node["children"].append(build_tree(entry))
+            except OSError as exc:
+                print(f"读取目录 {dir_path} 失败: {exc}")
             return tree_node
 
-        return build_tree(self.root_dir)
+        return build_tree(root_path)
 
     def get_images_in_folder(self, folder_path):
         """
         获取指定文件夹中所有 .dat 文件的相对路径列表。
         """
-        if not self.root_dir or not folder_path.startswith(self.root_dir):
+        if not self.root_dir:
             return []
 
-        relative_paths = []
+        root_path = Path(self.root_dir).resolve()
+        folder = Path(folder_path).resolve()
         try:
-            for item in os.listdir(folder_path):
-                full_path = os.path.join(folder_path, item)
-                # 跳过文件夹
-                if os.path.isdir(full_path):
+            folder.relative_to(root_path)
+        except ValueError:
+            return []
+
+        relative_paths: list[str] = []
+        try:
+            for entry in folder.iterdir():
+                if entry.is_dir():
                     continue
-                    
-                if item.lower().endswith(DAT_FILE_EXTENSION) or self._is_valid_sns_filename(item):
-                    relative_path = os.path.relpath(full_path, self.root_dir)
-                    relative_paths.append(relative_path)
-        except OSError as e:
-            print(f"读取目录 {folder_path} 错误: {e}")
+                filename = entry.name
+                if filename.lower().endswith(
+                    DAT_FILE_EXTENSION
+                ) or self._is_valid_sns_filename(filename):
+                    relative_paths.append(str(entry.relative_to(root_path)))
+        except OSError as exc:
+            print(f"读取目录 {folder} 错误: {exc}")
 
         return relative_paths
 
@@ -182,11 +198,11 @@ class Api:
             case _:
                 print(f"不支持的解密版本: {version}")
                 return ""
-            
+
         if data.startswith(b"wxgf"):
             print("[+] 转换 WxGF 文件...")
             data = wxam.wxam_to_image(data)
-    
+
         return base64.b64encode(data).decode("utf-8")
 
 
@@ -211,7 +227,7 @@ if __name__ == "__main__":
     api = Api()
 
     # 4. 获取 index.html 的路径
-    html_path = get_resource_path("index.html")
+    html_path = get_resource_path("./templates/index.html")
     print(f"加载界面文件: {html_path}")
 
     # 5. 创建并启动 PyWebview 窗口

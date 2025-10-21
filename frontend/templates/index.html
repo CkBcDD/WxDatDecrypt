@@ -10,7 +10,7 @@
     <script type="module" src="https://npm.elemecdn.com/@fluentui/web-components"></script>
 
     <!-- 2. 链接到外部样式表 -->
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="../static/css/style.css">
 </head>
 
 <body>
@@ -490,6 +490,17 @@
                         <!-- 面包屑导航 -->
                         <div id="breadcrumb-container">
                             <fluent-breadcrumb id="breadcrumb"></fluent-breadcrumb>
+                            <div style="margin-left: auto; display: flex; gap: 8px; align-items: center;">
+                                <fluent-text>布局:</fluent-text>
+                                <fluent-button id="layout-toggle-btn" appearance="stealth" title="切换布局模式">
+                                    <svg id="layout-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                                        viewBox="0 0 20 20" fill="currentColor">
+                                        <!-- 瀑布流图标 -->
+                                        <path
+                                            d="M3 2h4v6H3V2zm0 8h4v8H3v-8zm6-8h4v4H9V2zm0 6h4v10H9V8zm6-6h4v8h-4V2zm0 10h4v6h-4v-6z" />
+                                    </svg>
+                                </fluent-button>
+                            </div>
                         </div>
                         <!-- 图片滚动容器 -->
                         <div class="gallery-scroll-container">
@@ -502,326 +513,26 @@
         </div>
     </fluent-design-system-provider>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // --- 元素获取 ---
-            const homeBtn = document.getElementById('home-btn');
-            const folderBtn = document.getElementById('folder-btn');
-            const selectFolderBtn = document.getElementById('select-folder-btn');
-            const homeView = document.getElementById('home-view');
-            const folderView = document.getElementById('folder-view');
-            const dirTree = document.getElementById('dir-tree');
-            const breadcrumb = document.getElementById('breadcrumb');
-            const imageGallery = document.getElementById('image-gallery');
-            const scrollContainer = document.querySelector('.gallery-scroll-container');
-            const currentFolderInfo = document.getElementById('current-folder-info');
+    <div id="image-viewer" class="dialog hidden">
+        <div class="viewer-backdrop"></div>
+        <div class="viewer-content" role="dialog" aria-modal="true">
+            <div class="viewer-toolbar">
+                <fluent-text id="viewer-caption"></fluent-text>
+                <div class="viewer-toolbar-actions">
+                    <fluent-button id="viewer-reset-btn" appearance="outline">重置视图</fluent-button>
+                    <fluent-button id="viewer-close-btn" appearance="accent">关闭</fluent-button>
+                </div>
+            </div>
+            <div id="viewer-stage" tabindex="0">
+                <div id="viewer-image-wrapper">
+                    <img id="viewer-image" alt="预览图像" draggable="false" />
+                </div>
+            </div>
+        </div>
+    </div>
 
-            // --- 状态管理 ---
-            let currentRootDir = null;
-            let allImagePaths = [];
-            let currentImageIndex = 0;
-            let columnElements = [];
-            let sentinelObserver = null;
-            let isLoading = false; // 关键的加载锁
-            const BATCH_SIZE = 10; // 每次滚动加载的图片数量
+    <script defer src="../static/js/main.js"></script>
 
-            // --- 辅助函数：防抖 ---
-            function debounce(func, delay) {
-                let timeout;
-                return function (...args) {
-                    clearTimeout(timeout);
-                    timeout = setTimeout(() => func.apply(this, args), delay);
-                };
-            }
-
-            // --- 视图切换 ---
-            function switchView(viewName) {
-                const isFolderView = viewName === 'folder';
-                homeBtn.appearance = isFolderView ? 'stealth' : 'accent';
-                folderBtn.appearance = isFolderView ? 'accent' : 'stealth';
-                homeView.classList.toggle('hidden', isFolderView);
-                folderView.classList.toggle('hidden', !isFolderView);
-            }
-
-            // --- 事件监听 ---
-            homeBtn.addEventListener('click', () => switchView('home'));
-            folderBtn.addEventListener('click', () => {
-                if (currentRootDir) switchView('folder');
-                else alert("请先在主页选择一个根目录！");
-            });
-            selectFolderBtn.addEventListener('click', async () => {
-                const result = await window.pywebview.api.open_folder_dialog();
-                if (result && result.success) {
-                    currentRootDir = result.path;
-                    currentFolderInfo.textContent = `当前目录: ${currentRootDir}`;
-                    await loadAndRenderDirectoryTree();
-                    switchView('folder');
-                }
-            });
-            window.addEventListener('resize', debounce(() => {
-                if (allImagePaths.length > 0 && folderView.classList.contains('hidden') === false) {
-                    rebuildLayout();
-                }
-            }, 250));
-
-            // --- 目录树逻辑 (无大改) ---
-            async function loadAndRenderDirectoryTree() {
-                const treeData = await window.pywebview.api.get_folder_tree();
-                if (treeData) {
-                    dirTree.innerHTML = '';
-                    const treeItem = createTreeNode(treeData);
-                    dirTree.appendChild(treeItem);
-                    treeItem.expanded = true;
-                    treeItem.selected = true;
-                    selectTreeNode(treeItem);
-                }
-            }
-            function createTreeNode(nodeData) {
-                const treeItem = document.createElement('fluent-tree-item');
-                treeItem.dataset.path = nodeData.path;
-                treeItem.dataset.name = nodeData.name;
-                treeItem.textContent = nodeData.name;
-                if (nodeData.children && nodeData.children.length > 0) {
-                    nodeData.children.forEach(child => treeItem.appendChild(createTreeNode(child)));
-                } else {
-                    const icon = document.createElement('span');
-                    icon.slot = 'start';
-                    treeItem.appendChild(icon);
-                }
-                return treeItem;
-            }
-            dirTree.addEventListener('click', e => {
-                const clickedItem = e.target.closest('fluent-tree-item');
-                if (clickedItem) selectTreeNode(clickedItem);
-            });
-            function selectTreeNode(nodeElement) {
-                if (!nodeElement) return;
-                let parent = nodeElement.parentElement;
-                while (parent && parent.tagName === 'FLUENT-TREE-ITEM') {
-                    parent.expanded = true;
-                    parent = parent.parentElement;
-                }
-                dirTree.querySelectorAll('fluent-tree-item').forEach(item => item.selected = false);
-                nodeElement.selected = true;
-                const folderPath = nodeElement.dataset.path;
-                if (folderPath) {
-                    updateBreadcrumb(folderPath);
-                    startImageLoading(folderPath);
-                }
-            }
-            function updateBreadcrumb(path) {
-                breadcrumb.innerHTML = '';
-                if (!currentRootDir || !path.startsWith(currentRootDir)) {
-                    const item = document.createElement('fluent-breadcrumb-item');
-                    item.textContent = path;
-                    breadcrumb.appendChild(item);
-                    return;
-                }
-                let runningPath = currentRootDir;
-                const rootName = currentRootDir.split(/[\\/]/).pop();
-                const rootItem = document.createElement('fluent-breadcrumb-item');
-                rootItem.textContent = rootName;
-                rootItem.dataset.path = runningPath;
-                breadcrumb.appendChild(rootItem);
-                const relativePath = path.substring(currentRootDir.length);
-                const parts = relativePath.split(/[\\/]/).filter(p => p);
-                const separatorChar = path.includes('\\') ? '\\' : '/';
-                parts.forEach(part => {
-                    runningPath += separatorChar + part;
-                    const item = document.createElement('fluent-breadcrumb-item');
-                    item.textContent = part;
-                    item.dataset.path = runningPath;
-                    breadcrumb.appendChild(item);
-                });
-            }
-            breadcrumb.addEventListener('click', e => {
-                const targetItem = e.target.closest('fluent-breadcrumb-item');
-                if (targetItem && targetItem.dataset.path) {
-                    const path = targetItem.dataset.path.replace(/\\/g, '\\\\');
-                    const nodeElement = dirTree.querySelector(`fluent-tree-item[data-path="${path}"]`);
-                    if (nodeElement) selectTreeNode(nodeElement);
-                }
-            });
-
-
-            // --- 全新图片加载和布局逻辑 ---
-
-            // 1. 启动或重置图片加载流程
-            async function startImageLoading(folderPath) {
-                if (isLoading) return;
-                isLoading = true;
-
-                // 清理
-                if (sentinelObserver) sentinelObserver.disconnect();
-                imageGallery.innerHTML = '';
-                currentImageIndex = 0;
-                columnElements = [];
-                scrollContainer.scrollTop = 0; // 回到顶部
-
-                try {
-                    allImagePaths = await window.pywebview.api.get_images_in_folder(folderPath);
-                    if (!allImagePaths || allImagePaths.length === 0) {
-                        imageGallery.innerHTML = '<fluent-p>该目录下没有找到可显示的图片文件。</fluent-p>';
-                        return;
-                    }
-                    setupLayout();
-                    loadInitialImages();
-                } catch (e) {
-                    console.error(`startImageLoading: 获取图片列表失败:`, e);
-                } finally {
-                    isLoading = false;
-                }
-            }
-
-            // 1a. 当窗口大小改变时，重建布局
-            function rebuildLayout() {
-                const images = Array.from(imageGallery.querySelectorAll('.image-card'));
-                setupLayout(); // 创建新列
-                // 将已存在的图片卡片重新分配到新列中
-                images.forEach(card => {
-                    const shortestColumn = getShortestColumn();
-                    shortestColumn.appendChild(card);
-                });
-            }
-
-            // 2. 设置布局（创建列和观察器）
-            function setupLayout() {
-                imageGallery.innerHTML = '';
-                const galleryWidth = imageGallery.clientWidth - 32; // 减去左右padding的16px*2
-                const targetColWidth = 200; // 目标列宽
-                const gapWidth = 16; // 列间距
-
-                // 计算列数：总宽度除以（目标宽度+间距）
-                const numCols = Math.max(1, Math.floor((galleryWidth + gapWidth) / (targetColWidth + gapWidth)));
-
-                // 计算实际列宽：(总宽度 + 间距) / 列数 - 间距
-                const actualColWidth = (galleryWidth + gapWidth) / numCols - gapWidth;
-
-                columnElements = [];
-                for (let i = 0; i < numCols; i++) {
-                    const col = document.createElement('div');
-                    col.className = 'image-column';
-                    col.style.width = actualColWidth + 'px';
-                    columnElements.push(col);
-                    imageGallery.appendChild(col);
-                }
-
-                // 创建哨兵观察器
-                sentinelObserver = new IntersectionObserver(entries => {
-                    if (entries[0].isIntersecting && !isLoading) {
-                        loadMoreImages();
-                    }
-                }, { root: scrollContainer, rootMargin: "500px" });
-            }
-
-            // 3. 初始加载，填满视区
-            function loadInitialImages() {
-                // 持续加载，直到最短的列超出视区底部
-                while (currentImageIndex < allImagePaths.length) {
-                    const shortestColumn = getShortestColumn();
-                    if (shortestColumn.offsetHeight > scrollContainer.clientHeight) {
-                        break; // 视区已满
-                    }
-                    addImageToColumn(shortestColumn);
-                }
-                setupSentinel(); // 设置哨兵以备滚动
-            }
-
-            // 4. 加载更多图片（由哨兵触发）
-            function loadMoreImages() {
-                if (isLoading) return;
-                isLoading = true;
-
-                const fragment = document.createDocumentFragment();
-                const limit = Math.min(currentImageIndex + BATCH_SIZE, allImagePaths.length);
-
-                for (let i = currentImageIndex; i < limit; i++) {
-                    addImageToColumn(getShortestColumn());
-                }
-
-                setupSentinel();
-                isLoading = false;
-            }
-
-            // 5. 添加单张图片到指定列
-            function addImageToColumn(column) {
-                if (currentImageIndex >= allImagePaths.length) return;
-
-                const relPath = allImagePaths[currentImageIndex];
-                currentImageIndex++;
-
-                const card = document.createElement('fluent-card');
-                card.className = 'image-card is-loading';
-                const img = document.createElement('img');
-                const caption = document.createElement('div');
-                caption.className = 'caption';
-                caption.textContent = relPath.split(/[\\/]/).pop();
-
-                const placeholder = document.createElement('div');
-                placeholder.className = 'image-placeholder';
-                placeholder.innerHTML = '<fluent-progress-ring></fluent-progress-ring>';
-
-                card.appendChild(placeholder);
-                card.appendChild(img);
-                card.appendChild(caption);
-                column.appendChild(card);
-
-                fetchAndSetImage(relPath, img);
-            }
-
-            // 6. 放置哨兵
-            function setupSentinel() {
-                let sentinel = document.getElementById('sentinel');
-                if (sentinel) sentinelObserver.unobserve(sentinel);
-
-                if (currentImageIndex < allImagePaths.length) {
-                    if (!sentinel) {
-                        sentinel = document.createElement('div');
-                        sentinel.id = 'sentinel';
-                    }
-                    // 将哨兵放在最短列的末尾，确保它能被正确触发
-                    getShortestColumn().appendChild(sentinel);
-                    sentinelObserver.observe(sentinel);
-                } else if (sentinel) {
-                    sentinel.remove();
-                }
-            }
-
-            // 7. 辅助函数：获取当前最短的列
-            function getShortestColumn() {
-                return columnElements.reduce((shortest, current) =>
-                    current.offsetHeight < shortest.offsetHeight ? current : shortest, columnElements[0]);
-            }
-
-            // 8. 获取并设置图片数据（与之前相同）
-            async function fetchAndSetImage(relPath, imgElement) {
-                try {
-                    const base64 = await window.pywebview.api.decrypt_dat(relPath);
-                    if (!base64) throw new Error("解密返回空数据。");
-                    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-                    const imageBlob = new Blob([bytes], { type: "image/jpeg" });
-                    const objectURL = URL.createObjectURL(imageBlob);
-
-                    imgElement.src = objectURL;
-                    imgElement.onload = () => {
-                        imgElement.closest('.image-card')?.classList.remove('is-loading');
-                        URL.revokeObjectURL(objectURL);
-                    };
-                    imgElement.onerror = () => { throw new Error("无法从Blob加载图片。"); }
-                } catch (error) {
-                    console.error(`fetchAndSetImage: 无法加载图片 ${relPath}:`, error);
-                    const card = imgElement.closest('.image-card');
-                    if (card) {
-                        const placeholder = card.querySelector('.image-placeholder');
-                        if (placeholder) placeholder.innerHTML = '加载失败';
-                    }
-                }
-            }
-
-            // --- 初始化 ---
-            switchView('home');
-        });
-    </script>
 </body>
 
 </html>

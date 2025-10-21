@@ -1,27 +1,18 @@
-import argparse
-import asyncio
 import ctypes
+import json
+import os
 import re
-import struct
-import sys
 import threading
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from ctypes import wintypes
 from functools import lru_cache
-from multiprocessing import freeze_support
 from pathlib import Path
 from typing import Any
 
 import pymem
 import yara
 from Crypto.Cipher import AES
-from Crypto.Util import Padding
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
-from hypercorn.asyncio import serve
-from hypercorn.config import Config
 
 # 定义必要的常量
 PROCESS_ALL_ACCESS = 0x1F0FFF
@@ -200,6 +191,7 @@ def dump_wechat_info_v4(encrypted: bytes, pid: int) -> bytes:
     else:
         raise RuntimeError("未找到 AES 密钥")
 
+
 def sort_template_files_by_date(template_files):
     """
     根据文件路径中的 YYYY-MM 部分，从大到小（降序）排序文件列表。
@@ -218,7 +210,7 @@ def sort_template_files_by_date(template_files):
         """
         # 使用正则表达式查找形如 "YYYY-MM" 的模式
         # r'(\d{4}-\d{2})' 匹配四个数字-两个数字，并将其捕获为一个组
-        match = re.search(r'(\d{4}-\d{2})', str(filepath))
+        match = re.search(r"(\d{4}-\d{2})", str(filepath))
         if match:
             return match.group(1)  # 返回捕获到的日期字符串
         else:
@@ -226,19 +218,26 @@ def sort_template_files_by_date(template_files):
             # 例如，返回一个非常小的字符串，使其在降序排序时排在最后，
             # 或者抛出错误。这里假设所有路径都包含日期。
             # print(f"警告：路径中未找到 YYYY-MM 格式的日期: {filepath}")
-            return "0000-00" # 返回一个默认值，确保排序行为可预测
+            return "0000-00"  # 返回一个默认值，确保排序行为可预测
 
     # 使用 sorted() 函数进行排序，key 参数指定了用于比较的函数，
     # reverse=True 表示降序排序（从大到小）
     sorted_files = sorted(template_files, key=get_date_from_path, reverse=True)
     return sorted_files
 
-def find_key(weixin_dir: Path):
+
+def find_key(
+    weixin_dir: Path,
+    version: int = 4,
+    xor_key_: int | None = None,
+    aes_key_: bytes | None = None,
+):
     """
     遍历目录下文件, 找到至多 16 个 (.*)_t.dat 文件,
     收集最后两位字节, 选择出现次数最多的两个字节.
     """
-    print(f"[+] 读取文件, 收集密钥...")
+    assert version in [3, 4]
+    print(f"[+] 微信 {version}, 读取文件, 收集密钥...")
 
     # 查找所有 _t.dat 结尾的文件
     template_files = sort_template_files_by_date(list(weixin_dir.rglob("*_t.dat")))
@@ -272,6 +271,16 @@ def find_key(weixin_dir: Path):
     else:
         raise RuntimeError("未能找到 XOR 密钥")
 
+    if xor_key_:
+        if xor_key_ == xor_key:
+            print(f"[+] 验证成功")
+            return xor_key_, aes_key_
+        else:
+            raise RuntimeError
+
+    if version == 3:
+        return xor_key, b"cfcd208495d565ef"
+
     for file in template_files:
         with open(file, "rb") as f:
             # 检查文件头
@@ -303,117 +312,25 @@ def find_key(weixin_dir: Path):
     return xor_key, aes_key
 
 
-def decrypt_dat_v3(input_path: str | Path, xor_key: int) -> bytes:
-    # 读取加密文件的内容
-    with open(input_path, "rb") as f:
-        data = f.read()
-
-    # 将解密后的数据写入输出文件
-    return bytes(b ^ xor_key for b in data)
+CONFIG_FILE = "config.json"
 
 
-def decrypt_dat_v4(input_path: str | Path, xor_key: int, aes_key: bytes) -> bytes:
-    # 读取加密文件的内容
-    with open(input_path, "rb") as f:
-        header, data = f.read(0xF), f.read()
-        signature, aes_size, xor_size = struct.unpack("<6sLLx", header)
-        aes_size += AES.block_size - aes_size % AES.block_size
+def read_key_from_config() -> tuple[int, bytes]:
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as f:
+            key_dict = json.loads(f.read())
 
-        aes_data = data[:aes_size]
-        raw_data = data[aes_size:]
+        x, y = key_dict["xor"], key_dict["aes"]
+        return x, y.encode()[:16]
 
-    cipher = AES.new(aes_key, AES.MODE_ECB)
-    decrypted_data = Padding.unpad(cipher.decrypt(aes_data), AES.block_size)
-
-    if xor_size > 0:
-        raw_data = data[aes_size:-xor_size]
-        xor_data = data[-xor_size:]
-        xored_data = bytes(b ^ xor_key for b in xor_data)
-    else:
-        xored_data = b""
-
-    # 将解密后的数据写入输出文件
-    return decrypted_data + raw_data + xored_data
+    return 0, b""
 
 
-def decrypt_dat(input_file: str | Path) -> int:
-    with open(input_file, "rb") as f:
-        signature = f.read(6)
+def store_key(xor_k: int, aes_k: bytes) -> None:
+    key_dict = {
+        "xor": xor_k,
+        "aes": aes_k.decode(),
+    }
 
-    match signature:
-        case b"\x07\x08V1\x08\x07":
-            return 1
-
-        case b"\x07\x08V2\x08\x07":
-            return 2
-
-        case _:
-            return 0
-
-
-app = FastAPI()
-
-# 添加 CORS 中间件
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-class WeixinInfo:
-    weixin_dir: Path
-    xor_key: int
-    aes_key: bytes
-
-
-@app.get("/decrypt/{file_path:path}")
-async def decrypt(file_path: str) -> Response:
-    global info
-
-    full_path = info.weixin_dir / file_path
-
-    if not full_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-
-    print(f"[+] 解密文件 {full_path}...")
-
-    version = decrypt_dat(full_path)
-    print(f"[+] 加密版本: v{version}")
-    match version:
-        case 0:
-            data = decrypt_dat_v3(full_path, info.xor_key)
-
-        case 1:
-            data = decrypt_dat_v4(full_path, info.xor_key, b"cfcd208495d565ef")
-
-        case 2:
-            data = decrypt_dat_v4(full_path, info.xor_key, info.aes_key)
-
-    return Response(content=data, media_type="image/png")
-
-
-info = WeixinInfo()
-
-if __name__ == "__main__":
-    freeze_support()
-
-    parser = argparse.ArgumentParser(description="微信文件解密服务")
-    parser.add_argument("-d", "--dir", help="微信文件目录路径")
-    args = parser.parse_args()
-
-    info.weixin_dir = Path(args.dir).resolve()
-
-    if not info.weixin_dir.exists():
-        print(f"[-] 错误：目录 {info.weixin_dir} 不存在")
-        sys.exit(1)
-
-    print(f"[+] 微信文件目录: {info.weixin_dir}")
-    info.xor_key, info.aes_key = find_key(info.weixin_dir)
-
-    config = Config()
-    config.bind = ["127.0.0.1:49152"]
-    print(f"[+] 服务启动在: http://127.0.0.1:49152")
-    asyncio.run(serve(app, config))
+    with open(CONFIG_FILE, "w") as f:
+        f.write(json.dumps(key_dict))
