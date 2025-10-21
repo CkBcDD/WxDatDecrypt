@@ -39,6 +39,7 @@ jobs:
             --noconfirm --onefile --name WxDatDecryptApp `
             --add-data "frontend/templates;frontend/templates" `
             --add-data "frontend/static;frontend/static" `
+            --add-binary "backend/src/wxam/VoipEngine.dll" `
             --icon "frontend/static/icons/app.ico"
 
           uv run --with pyinstaller pyinstaller tool.py `
