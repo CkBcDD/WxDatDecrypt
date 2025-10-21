@@ -1,6 +1,6 @@
 [project]
 name = "WxDatDecrypt"
-version = "1.1.0"
+version = "2.0.0"
 description = "解密与查看微信 4.1 的图片，将微信缓存的 dat 文件解密为原始图片格式"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -11,5 +11,5 @@ dependencies = [
     "pymem>=1.14.0",
     "pywebview>=6.0",
     "rich>=14.2.0",
-    "yara>=1.7.7",
+    "yara-python>=4.5.4",
 ]

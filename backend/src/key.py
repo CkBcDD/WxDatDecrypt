@@ -3,8 +3,9 @@ import json
 import os
 import re
 import threading
+import heapq
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from ctypes import wintypes
 from functools import lru_cache
 from pathlib import Path
@@ -29,6 +30,7 @@ AES_BLOCK_SIZE = 16
 ROUND_COUNT = 256000
 PAGE_SIZE = 4096
 SALT_SIZE = 16
+READ_CHUNK_SIZE = 1 << 20
 
 finish_flag = False
 
@@ -60,15 +62,28 @@ def open_process(pid):
 
 
 # 读取目标进程内存
-def read_process_memory(process_handle, address, size):
-    buffer = ctypes.create_string_buffer(size)
-    bytes_read = ctypes.c_size_t(0)
-    success = ctypes.windll.kernel32.ReadProcessMemory(
-        process_handle, ctypes.c_void_p(address), buffer, size, ctypes.byref(bytes_read)
-    )
-    if not success:
-        return None
-    return buffer.raw
+def read_process_memory(process_handle, address, size, chunk_size=READ_CHUNK_SIZE):
+    data = bytearray()
+    offset = 0
+    while offset < size:
+        to_read = min(chunk_size, size - offset)
+        chunk_buffer = ctypes.create_string_buffer(to_read)
+        bytes_read = ctypes.c_size_t(0)
+        success = ReadProcessMemory(
+            process_handle,
+            ctypes.c_void_p(address + offset),
+            chunk_buffer,
+            to_read,
+            ctypes.byref(bytes_read),
+        )
+        if not success or bytes_read.value == 0:
+            break
+        read_len = bytes_read.value
+        data.extend(chunk_buffer.raw[:read_len])
+        offset += read_len
+        if read_len < to_read:
+            break
+    return bytes(data) if data else None
 
 
 # 获取所有内存区域
@@ -80,8 +95,8 @@ def get_memory_regions(process_handle):
         process_handle, ctypes.c_void_p(address), ctypes.byref(mbi), ctypes.sizeof(mbi)
     ):
         if mbi.State == MEM_COMMIT and mbi.Type == MEM_PRIVATE:
-            regions.append((mbi.BaseAddress, mbi.RegionSize))
-        address += mbi.RegionSize
+            regions.append((int(mbi.BaseAddress), int(mbi.RegionSize)))
+        address += int(mbi.RegionSize)
     return regions
 
 
@@ -137,34 +152,40 @@ def search_memory_chunk(process_handle, base_address, region_size, encrypted, ru
     return None
 
 
+YARA_RULE_SOURCE = r"""
+rule AesKey {
+    strings:
+        $pattern = /[^a-z0-9][a-z0-9]{32}[^a-z0-9]/
+    condition:
+        $pattern
+}
+"""
+
+
+@lru_cache(maxsize=1)
+def load_yara_rules():
+    return yara.compile(source=YARA_RULE_SOURCE)
+
+
 def get_aes_key(encrypted: bytes, pid: int) -> Any:
     process_handle = open_process(pid)
     if not process_handle:
         print(f"无法打开进程 {pid}")
         return ""
 
-    # 编译YARA规则
-    rules_key = r"""
-    rule AesKey {
-        strings:
-            $pattern = /[^a-z0-9][a-z0-9]{32}[^a-z0-9]/
-        condition:
-            $pattern
-    }
-    """
-    rules = yara.compile(source=rules_key)
+    rules = load_yara_rules()
 
-    # 获取内存区域
     process_infos = get_memory_regions(process_handle)
+    if not process_infos:
+        CloseHandle(process_handle)
+        return None
 
-    # 创建线程池
     found_result = threading.Event()
     result = [None]
 
-    def process_chunk(args):
+    def process_chunk(base_address: int, region_size: int):
         if found_result.is_set():
             return None
-        base_address, region_size = args
         res = search_memory_chunk(
             process_handle, base_address, region_size, encrypted, rules
         )
@@ -173,8 +194,17 @@ def get_aes_key(encrypted: bytes, pid: int) -> Any:
             found_result.set()
         return res
 
-    with ThreadPoolExecutor(max_workers=min(32, len(process_infos))) as executor:
-        executor.map(process_chunk, process_infos)
+    max_workers = min(32, len(process_infos)) or 1
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(process_chunk, base_address, region_size)
+            for base_address, region_size in process_infos
+        ]
+        for future in as_completed(futures):
+            res = future.result()
+            if res:
+                executor.shutdown(wait=False, cancel_futures=True)
+                break
 
     CloseHandle(process_handle)
     return result[0]
@@ -192,16 +222,9 @@ def dump_wechat_info_v4(encrypted: bytes, pid: int) -> bytes:
         raise RuntimeError("未找到 AES 密钥")
 
 
-def sort_template_files_by_date(template_files):
+def sort_template_files_by_date(template_files, limit: int | None = None):
     """
     根据文件路径中的 YYYY-MM 部分，从大到小（降序）排序文件列表。
-
-    Args:
-        template_files (list): 包含文件路径字符串的列表，例如：
-                               "{weixin_dir}/msg/attach/.../2025-06/Img/...dat"
-
-    Returns:
-        list: 按照日期从大到小排序后的文件路径列表。
     """
 
     def get_date_from_path(filepath):
@@ -220,10 +243,9 @@ def sort_template_files_by_date(template_files):
             # print(f"警告：路径中未找到 YYYY-MM 格式的日期: {filepath}")
             return "0000-00"  # 返回一个默认值，确保排序行为可预测
 
-    # 使用 sorted() 函数进行排序，key 参数指定了用于比较的函数，
-    # reverse=True 表示降序排序（从大到小）
-    sorted_files = sorted(template_files, key=get_date_from_path, reverse=True)
-    return sorted_files
+    if limit is not None:
+        return heapq.nlargest(limit, template_files, key=get_date_from_path)
+    return sorted(template_files, key=get_date_from_path, reverse=True)
 
 
 def find_key(
@@ -240,20 +262,24 @@ def find_key(
     print(f"[+] 微信 {version}, 读取文件, 收集密钥...")
 
     # 查找所有 _t.dat 结尾的文件
-    template_files = sort_template_files_by_date(list(weixin_dir.rglob("*_t.dat")))
-
+    template_candidates = list(weixin_dir.rglob("*_t.dat"))
+    template_files = sort_template_files_by_date(template_candidates)
     if not template_files:
         raise RuntimeError("未找到模板文件")
+    recent_template_files = sort_template_files_by_date(template_candidates, limit=16)
 
     # 收集所有文件最后两个字节
     last_bytes_list = []
-    for file in template_files[:16]:
+    last_bytes_cache: dict[Path, bytes] = {}
+    for file in recent_template_files:
         try:
             with open(file, "rb") as f:
-                # 读取最后两个字节
-                f.seek(-2, 2)
+                f.seek(-2, os.SEEK_END)
                 last_bytes = f.read(2)
+                if len(last_bytes) != 2:
+                    continue
                 last_bytes_list.append(last_bytes)
+                last_bytes_cache[file] = last_bytes
         except Exception as e:
             print(f"[-] 读取文件 {file} 失败: {e}")
             continue
@@ -281,21 +307,29 @@ def find_key(
     if version == 3:
         return xor_key, b"cfcd208495d565ef"
 
+    ciphertext = b""
     for file in template_files:
-        with open(file, "rb") as f:
-            # 检查文件头
-            if f.read(6) != b"\x07\x08V2\x08\x07":
-                continue
+        try:
+            with open(file, "rb") as f:
+                if f.read(6) != b"\x07\x08V2\x08\x07":
+                    continue
 
-            # 检查文件尾
-            f.seek(-2, 2)
-            if f.read(2) != most_common:
-                continue
+                tail_bytes = last_bytes_cache.get(file)
+                if tail_bytes is None:
+                    f.seek(-2, os.SEEK_END)
+                    tail_bytes = f.read(2)
+                    last_bytes_cache[file] = tail_bytes
 
-            # 读取 AES 密钥
-            f.seek(0xF)
-            ciphertext = f.read(16)
-            break
+                if tail_bytes != most_common:
+                    continue
+
+                f.seek(0xF)
+                ciphertext = f.read(16)
+                if len(ciphertext) == 16:
+                    break
+        except Exception as e:
+            print(f"[-] 读取文件 {file} 失败: {e}")
+            continue
     else:
         raise RuntimeError("对于 AES, 未能成功读取任何模板文件")
 

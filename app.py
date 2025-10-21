@@ -7,8 +7,8 @@ from pathlib import Path
 
 import webview
 
-from backend.src.decrypt import decrypt_dat, decrypt_dat_v3, decrypt_dat_v4
-import backend.src.wxam as wxam
+from backend.src.decrypt import decrypt_dat
+from backend.src.wxam import wxam_to_image
 
 
 CONFIG_FILE = "config.json"
@@ -185,23 +185,17 @@ class Api:
 
         print(f"[+] 解密文件 {full_path}...")
 
-        version = decrypt_dat(full_path)
+        try:
+            version, data = decrypt_dat(full_path, info.xor_key, info.aes_key or None)
+        except ValueError as exc:
+            print(f"解密失败: {exc}")
+            return ""
+
         print(f"[+] 加密版本: v{version}")
-        data = b""
-        match version:
-            case 0:
-                data = decrypt_dat_v3(full_path, info.xor_key)
-            case 1:
-                data = decrypt_dat_v4(full_path, info.xor_key, b"cfcd208495d565ef")
-            case 2:
-                data = decrypt_dat_v4(full_path, info.xor_key, info.aes_key)
-            case _:
-                print(f"不支持的解密版本: {version}")
-                return ""
 
         if data.startswith(b"wxgf"):
             print("[+] 转换 WxGF 文件...")
-            data = wxam.wxam_to_image(data)
+            data = wxam_to_image(data)
 
         return base64.b64encode(data).decode("utf-8")
 
@@ -227,13 +221,11 @@ if __name__ == "__main__":
     api = Api()
 
     # 4. 获取 index.html 的路径
-    html_path = get_resource_path("./templates/index.html")
+    html_path = Path(get_resource_path("frontend/templates/index.html"))
     print(f"加载界面文件: {html_path}")
-
-    # 5. 创建并启动 PyWebview 窗口
     window = webview.create_window(
         "微信图片查看器",
-        html_path,
+        html_path.as_uri(),
         js_api=api,
         width=1200,
         height=800,

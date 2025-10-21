@@ -10,7 +10,7 @@ from rich.panel import Panel
 from rich.theme import Theme
 from rich.table import Table
 
-from key import find_key, CONFIG_FILE
+from backend.src.key import find_key, CONFIG_FILE
 
 # 创建带有自定义主题的控制台
 theme = Theme({
