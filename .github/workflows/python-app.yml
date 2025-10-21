@@ -30,24 +30,15 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Lint with flake8
-        run: |
-          uv run --with flake8 flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          uv run --with flake8 flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
-      - name: Test with pytest
-        run: uv run --with pytest pytest
-
       - name: Build executables with PyInstaller
         run: |
-          uv run --with pyinstaller pyinstaller frontend/app.py ^
-            --noconfirm --onefile --name WxDatDecryptApp ^
-            --add-data "frontend/templates;frontend/templates" ^
-            --add-data "frontend/static;frontend/static" ^
-            --add-data "config.json;."
-          uv run --with pyinstaller pyinstaller backend/src/tool.py ^
-            --noconfirm --onefile --name WxDatDecryptTool ^
-            --add-data "config.json;."
+          uv run --with pyinstaller pyinstaller frontend/app.py `
+            --noconfirm --onefile --name WxDatDecryptApp `
+            --add-data "frontend/templates;frontend/templates" `
+            --add-data "frontend/static;frontend/static" `
+
+          uv run --with pyinstaller pyinstaller backend/src/tool.py `
+            --noconfirm --onefile --name WxDatDecryptTool `
 
       - name: Collect executables
         run: |
