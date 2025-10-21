@@ -1,0 +1,70 @@
+name: Python application
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint with flake8
+        run: |
+          uv run --with flake8 flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          uv run --with flake8 flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Test with pytest
+        run: uv run --with pytest pytest
+
+      - name: Build executables with PyInstaller
+        run: |
+          uv run --with pyinstaller pyinstaller frontend/app.py ^
+            --noconfirm --onefile --name WxDatDecryptApp ^
+            --add-data "frontend/templates;frontend/templates" ^
+            --add-data "frontend/static;frontend/static" ^
+            --add-data "config.json;."
+          uv run --with pyinstaller pyinstaller backend/src/tool.py ^
+            --noconfirm --onefile --name WxDatDecryptTool ^
+            --add-data "config.json;."
+
+      - name: Collect executables
+        run: |
+          mkdir artifacts
+          copy dist\WxDatDecryptApp.exe artifacts\
+          copy dist\WxDatDecryptTool.exe artifacts\
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: WxDatDecrypt-windows
+          path: artifacts\*
+
+      - name: Publish release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/WxDatDecryptApp.exe
+            dist/WxDatDecryptTool.exe
