@@ -32,14 +32,12 @@ jobs:
 
       - name: Build executables with PyInstaller
         run: |
-          uv run --with pyinstaller pyinstaller frontend/app.py ^
-            --noconfirm --onefile --name WxDatDecryptApp ^
-            --add-data "frontend/templates;frontend/templates" ^
-            --add-data "frontend/static;frontend/static" ^
-            --add-data "config.json;."
-          uv run --with pyinstaller pyinstaller backend/src/tool.py ^
-            --noconfirm --onefile --name WxDatDecryptTool ^
-            --add-data "config.json;."
+          uv run --with pyinstaller pyinstaller frontend/app.py `
+            --noconfirm --onefile --name WxDatDecryptApp `
+            --add-data "frontend/templates;frontend/templates" `
+            --add-data "frontend/static;frontend/static" `
+          uv run --with pyinstaller pyinstaller backend/src/tool.py `
+            --noconfirm --onefile --name WxDatDecryptTool `
 
       - name: Collect executables
         run: |
