@@ -3,5 +3,4 @@ __pycache__/
 build/
 config.json
 
-uv.lock
 .venv

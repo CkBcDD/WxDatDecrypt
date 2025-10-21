@@ -6,7 +6,7 @@
 
 ## 功能简介
 
-![程序界面预览](./docs/images/home.png)
+![程序界面预览](docs/images/home.png)
 
 - 图形化界面，操作简单直观
 - 将微信缓存的 `.dat` 文件解密为原始图片格式。
@@ -26,7 +26,7 @@
 
 ## 使用方法
 
-1. 从 [Releases](https://github.com/recarto404/WxDatDecrypt/releases) 页面下载预编译的二进制文件，或使用源代码文件。
+1. 从 [Releases](https://github.com/CkBcDD/WxDatDecrypt/releases) 页面下载预编译的二进制文件，或使用源代码文件。
 
 2. 首次使用前，需要先获取解密密钥：
    - 运行 `tool.exe`（或 `./backend/src/tool.py`）
@@ -42,7 +42,7 @@
 
 ## 许可证
 
-本项目采用 [MIT License](./LICENSE) 开源协议。
+本项目采用 [MIT License](LICENSE) 开源协议。
 
 ## 技术支持
 
