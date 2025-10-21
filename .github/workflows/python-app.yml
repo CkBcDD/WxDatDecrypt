@@ -39,9 +39,11 @@ jobs:
             --noconfirm --onefile --name WxDatDecryptApp `
             --add-data "frontend/templates;frontend/templates" `
             --add-data "frontend/static;frontend/static" `
+            --icon "frontend/static/icons/app.ico"
 
           uv run --with pyinstaller pyinstaller tool.py `
             --noconfirm --onefile --name WxDatDecryptTool `
+            --icon "frontend/static/icons/tool.ico"
 
       - name: Collect executables
         run: |
