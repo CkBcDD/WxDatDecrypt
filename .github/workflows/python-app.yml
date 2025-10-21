@@ -36,6 +36,7 @@ jobs:
             --noconfirm --onefile --name WxDatDecryptApp `
             --add-data "frontend/templates;frontend/templates" `
             --add-data "frontend/static;frontend/static" `
+
           uv run --with pyinstaller pyinstaller backend/src/tool.py `
             --noconfirm --onefile --name WxDatDecryptTool `
 
