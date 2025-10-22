@@ -40,6 +40,7 @@ jobs:
         run: |
           uv run python -m nuitka `
             --onefile `
+            --assume-yes-for-downloads `
             --output-dir=dist `
             --output-filename=WxDatDecryptApp.exe `
             --include-data-dir=frontend/templates=frontend/templates `
@@ -56,6 +57,7 @@ jobs:
         run: |
           uv run python -m nuitka `
             --onefile `
+            --assume-yes-for-downloads `
             --output-dir=dist `
             --output-filename=WxDatDecryptTool.exe `
             --windows-icon-from-ico=frontend/static/icons/tool.ico `
