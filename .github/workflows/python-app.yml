@@ -50,6 +50,20 @@ jobs:
           disable-cache: false
           assume-yes-for-downloads: true
 
+          lto: yes
+          jobs: -1
+ 
+          noinclude-setuptools-mode: error
+          noinclude-pytest-mode: error
+          noinclude-unittest-mode: nofollow
+          noinclude-pydoc-mode: error
+          noinclude-IPython-mode: error
+
+          python-flag: no_docstrings,no_asserts
+
+          show-memory: true
+          report: compilation-report-app.xml
+
       - name: Build WxDatDecryptTool with Nuitka
         uses: Nuitka/Nuitka-Action@v1.4
         with:
@@ -60,6 +74,20 @@ jobs:
           windows-icon-from-ico: frontend/static/icons/tool.ico
           disable-cache: false
           assume-yes-for-downloads: true
+
+          lto: yes
+          jobs: -1
+
+          noinclude-setuptools-mode: error
+          noinclude-pytest-mode: error
+          noinclude-unittest-mode: nofollow
+          noinclude-pydoc-mode: error
+          noinclude-IPython-mode: error
+
+          python-flag: no_docstrings,no_asserts
+
+          show-memory: true
+          report: compilation-report-tool.xml
 
       - name: Collect executables
         run: |
