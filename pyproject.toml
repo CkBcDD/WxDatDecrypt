@@ -1,6 +1,10 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
 [project]
 name = "WxDatDecrypt"
-version = "2.0.5"
+dynamic = ["version"]
 description = "解密与查看新旧微信的图片，将微信缓存的 dat 文件解密为原始图片格式"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -13,3 +17,12 @@ dependencies = [
     "rich>=14.2.0",
     "yara-python>=4.5.4",
 ]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend"]
