@@ -33,11 +33,7 @@ jobs:
             **/uv.lock
 
       - name: Install dependencies
-        run: uv sync
-
-      - name: Install Nuitka in venv
-        run: |
-          .\.venv\Scripts\activate
+        run: uv sync `
           uv add nuitka ordered-set zstandard
 
       - name: Build WxDatDecryptApp with Nuitka
