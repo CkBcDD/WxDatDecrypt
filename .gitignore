@@ -4,3 +4,9 @@ build/
 config.json
 
 .venv
+
+.hide
+
+.gitignore
+
+app.log

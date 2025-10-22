@@ -6,8 +6,10 @@
 
 import base64
 import json
+import logging
 import os
 import sys
+from logging.handlers import RotatingFileHandler
 from multiprocessing import freeze_support
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -21,6 +23,64 @@ from backend.src.wxam import wxam_to_image
 CONFIG_FILE = "config.json"
 DAT_FILE_EXTENSION = ".dat"
 
+# ==================== 日志配置 ====================
+# 调整此处的日志级别来控制输出粒度
+# DEBUG: 详细的调试信息
+# INFO: 一般信息
+# WARNING: 警告信息
+# ERROR: 错误信息
+# CRITICAL: 严重错误
+LOG_LEVEL = logging.WARNING  # 可在此修改全局日志级别
+LOG_FILE = "app.log"
+LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
+LOG_BACKUP_COUNT = 3
+
+
+def setup_logging() -> logging.Logger:
+    """配置日志系统。
+
+    Returns:
+        配置好的根日志记录器。
+    """
+    # 创建日志格式器
+    formatter = logging.Formatter(
+        fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    # 配置根日志记录器
+    root_logger = logging.getLogger()
+    root_logger.setLevel(LOG_LEVEL)
+
+    # 清除现有的处理器
+    root_logger.handlers.clear()
+
+    # 控制台处理器
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(LOG_LEVEL)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+
+    # 文件处理器（轮转）
+    try:
+        file_handler = RotatingFileHandler(
+            LOG_FILE,
+            maxBytes=LOG_MAX_BYTES,
+            backupCount=LOG_BACKUP_COUNT,
+            encoding="utf-8",
+        )
+        file_handler.setLevel(LOG_LEVEL)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+    except Exception as e:
+        root_logger.warning(f"无法创建日志文件处理器: {e}")
+
+    return root_logger
+
+
+# 初始化日志系统
+logger = setup_logging()
+
 
 def read_key_from_config() -> Tuple[int, bytes]:
     """从配置文件读取加密密钥。
@@ -29,6 +89,7 @@ def read_key_from_config() -> Tuple[int, bytes]:
         包含 XOR 密钥和 AES 密钥的元组。如果读取失败，返回 (0, b'')。
     """
     if not os.path.exists(CONFIG_FILE):
+        logger.info(f"配置文件不存在: {CONFIG_FILE}")
         return 0, b""
 
     try:
@@ -36,8 +97,9 @@ def read_key_from_config() -> Tuple[int, bytes]:
             key_dict = json.load(f)
         xor_key = int(key_dict.get("xor", 0))
         aes_value = key_dict.get("aes", b"")
+        logger.info(f"成功从 {CONFIG_FILE} 读取密钥配置")
     except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
-        print(f"读取配置失败: {exc}")
+        logger.error(f"读取配置文件失败: {exc}", exc_info=True)
         return 0, b""
 
     # 将 AES 值转换为字节类型
@@ -48,6 +110,7 @@ def read_key_from_config() -> Tuple[int, bytes]:
     else:
         aes_key = b""
 
+    logger.debug(f"解析密钥: XOR={xor_key}, AES长度={len(aes_key)}")
     return xor_key, aes_key[:16]
 
 
@@ -59,7 +122,7 @@ class WeixinInfo:
     Attributes:
         weixin_dir: 微信文件的根目录路径。
         xor_key: XOR 加密密钥。
-        aes_key: AES 加密密钥（最多16字节）。
+        aes_key: AES 加密密钥（最多16字节)。
     """
 
     weixin_dir: Optional[Path] = None
@@ -86,6 +149,7 @@ class Api:
         """初始化 API 实例."""
         self.root_dir: Optional[str] = None
         self.server_url: Optional[str] = None
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def _is_valid_sns_filename(self, filename: str) -> bool:
         """检查文件名是否为朋友圈 (Sns) 缓存文件的文件名形式。
@@ -97,7 +161,10 @@ class Api:
             如果文件名符合朋友圈缓存文件格式，返回 True，否则返回 False。
         """
         name = filename.removesuffix("_t")
-        return len(name) in [30, 32] and name.isalnum()
+        is_valid = len(name) in [30, 32] and name.isalnum()
+        if is_valid:
+            self.logger.debug(f"识别为朋友圈缓存文件: {filename}")
+        return is_valid
 
     def set_server_url(self, url: str) -> None:
         """设置 FastAPI 服务器的 URL。
@@ -106,6 +173,7 @@ class Api:
             url: 服务器的完整 URL 地址。
         """
         self.server_url = url
+        self.logger.info(f"服务器 URL 已设置: {url}")
 
     def get_server_url(self) -> Optional[str]:
         """获取 FastAPI 服务器的 URL。
@@ -113,6 +181,7 @@ class Api:
         Returns:
             服务器的 URL 地址，如果未设置则返回 None。
         """
+        self.logger.debug(f"获取服务器 URL: {self.server_url}")
         return self.server_url
 
     def set_root_dir(self, path: str) -> Dict[str, object]:
@@ -127,7 +196,9 @@ class Api:
         """
         if os.path.isdir(path):
             self.root_dir = path
+            self.logger.info(f"根目录已设置: {path}")
             return {"success": True, "path": path}
+        self.logger.warning(f"尝试设置无效路径: {path}")
         return {"success": False, "error": "无效的路径"}
 
     def get_folder_tree(self) -> Optional[Dict[str, object]]:
@@ -138,9 +209,11 @@ class Api:
             如果未设置根目录，返回 None。
         """
         if not self.root_dir:
+            self.logger.warning("尝试获取文件夹树但根目录未设置")
             return None
 
         root_path = Path(self.root_dir)
+        self.logger.info(f"开始构建文件夹树: {root_path}")
 
         def build_tree(dir_path: Path) -> Dict[str, object]:
             """递归构建目录树。
@@ -162,11 +235,14 @@ class Api:
                         children = tree_node["children"]
                         if isinstance(children, list):
                             children.append(build_tree(entry))
+                self.logger.debug(f"已扫描目录: {dir_path}")
             except OSError as exc:
-                print(f"读取目录 {dir_path} 失败: {exc}")
+                self.logger.error(f"读取目录失败 {dir_path}: {exc}")
             return tree_node
 
-        return build_tree(root_path)
+        tree = build_tree(root_path)
+        self.logger.info("文件夹树构建完成")
+        return tree
 
     def get_images_in_folder(self, folder_path: str) -> List[str]:
         """获取指定文件夹中所有 .dat 文件的相对路径列表。
@@ -178,6 +254,7 @@ class Api:
             相对于根目录的 .dat 文件路径列表。
         """
         if not self.root_dir:
+            self.logger.warning("根目录未设置，无法获取图片列表")
             return []
 
         root_path = Path(self.root_dir).resolve()
@@ -187,9 +264,12 @@ class Api:
         try:
             folder.relative_to(root_path)
         except ValueError:
+            self.logger.error(f"文件夹不在根目录下: {folder}")
             return []
 
+        self.logger.info(f"获取文件夹中的图片: {folder}")
         relative_paths: List[str] = []
+
         try:
             for entry in folder.iterdir():
                 if entry.is_dir():
@@ -199,8 +279,9 @@ class Api:
                     DAT_FILE_EXTENSION
                 ) or self._is_valid_sns_filename(filename):
                     relative_paths.append(str(entry.relative_to(root_path)))
+            self.logger.info(f"找到 {len(relative_paths)} 个图片文件")
         except OSError as exc:
-            print(f"读取目录 {folder} 错误: {exc}")
+            self.logger.error(f"读取目录错误 {folder}: {exc}", exc_info=True)
 
         return relative_paths
 
@@ -211,7 +292,9 @@ class Api:
             包含操作结果的字典。成功时包含 'success': True 和 'path'，
             失败时包含 'success': False。
         """
+        self.logger.info("打开文件夹选择对话框")
         result = window.create_file_dialog(webview.FileDialog.FOLDER)  # type: ignore
+
         if result:
             path = result[0]
             if os.path.isdir(path):
@@ -227,53 +310,54 @@ class Api:
                 info.xor_key = xor_k
                 info.aes_key = aes_k
 
-                print(f"初始密钥: xor={xor_k}, aes={aes_k}")
-                print(f"PyWebview API: 根目录已通过对话框设置为 {self.root_dir}")
-                print(
-                    f"FastAPI 全局 info.weixin_dir 已通过对话框设置为 {info.weixin_dir}"
-                )
+                self.logger.info(f"根目录已设置: {self.root_dir}")
+                self.logger.info(f"全局 info.weixin_dir 已设置: {info.weixin_dir}")
+                self.logger.debug(f"初始密钥: XOR={xor_k}, AES长度={len(aes_k)}")
+
                 return {"success": True, "path": path}
+
+        self.logger.info("用户取消文件夹选择")
         return {"success": False}
 
     def decrypt_dat(self, file_path: str) -> str:
-        """解密 .dat 文件并返回 Base64 编码的图片数据。
-
-        Args:
-            file_path: 相对于微信根目录的文件路径。
-
-        Returns:
-            Base64 编码的图片数据字符串。如果解密失败，返回空字符串。
-        """
-        # 使用全局 info 对象
+        """解密 .dat 文件并返回 Base64 编码的图片数据。"""
         if info.weixin_dir is None:
-            print("微信文件目录未设置。")
+            self.logger.error("微信文件目录未设置")
             return ""
 
         full_path = info.weixin_dir / file_path
 
         if not full_path.exists():
-            print("文件未找到")
+            self.logger.error(f"文件不存在: {full_path}")
             return ""
 
-        print(f"[+] 解密文件 {full_path}...")
+        self.logger.info(f"开始解密文件: {full_path}")
 
         try:
             version, data = decrypt_dat(full_path, info.xor_key, info.aes_key or None)
-        except ValueError as exc:
-            print(f"[-] 解密失败: {exc}")
-            return ""
+            self.logger.info(f"解密成功 - 版本: v{version}, 数据大小: {len(data)} 字节")
 
-        print(f"[+] 加密版本: v{version}")
+        except ValueError as exc:
+            self.logger.error(f"解密失败: {exc}")
+            return ""
+        except Exception as exc:
+            self.logger.critical(
+                f"解密时发生未知错误: {type(exc).__name__}: {exc}", exc_info=True
+            )
+            return ""
 
         # 处理 WxGF 格式
         if data.startswith(b"wxgf"):
-            print("[+] 转换 WxGF 文件...")
+            self.logger.info("检测到 WxGF 格式，开始转换...")
             data = wxam_to_image(data)
             if data is None:
-                print("[-] WxGF 转换失败")
+                self.logger.error("WxGF 转换失败")
                 return ""
+            self.logger.info(f"WxGF 转换成功，大小: {len(data)} 字节")
 
-        return base64.b64encode(data).decode("utf-8")
+        base64_result = base64.b64encode(data).decode("utf-8")
+        self.logger.debug(f"Base64 编码完成，长度: {len(base64_result)}")
+        return base64_result
 
     def save_image(
         self, base64_data: str, suggested_name: str, mime_type: str
@@ -289,19 +373,24 @@ class Api:
             包含操作结果的字典。
         """
         if not base64_data:
+            self.logger.warning("没有可保存的数据")
             return {"success": False, "error": "没有可保存的数据"}
 
         # 检查 window 是否已初始化
         if window is None:
+            self.logger.error("窗口未初始化")
             return {"success": False, "error": "窗口未初始化"}
 
         filename = (suggested_name or "image.jpg").strip()
+        self.logger.info(f"打开保存对话框，建议文件名: {filename}")
+
         dialog_result = window.create_file_dialog(
             webview.FileDialog.SAVE,
             save_filename=filename,
         )
 
         if not dialog_result:
+            self.logger.info("用户取消保存")
             return {"success": False, "error": "用户取消保存"}
 
         # 正确处理返回的文件路径
@@ -320,14 +409,18 @@ class Api:
                 "image/bmp": ".bmp",
                 "image/x-icon": ".ico",
             }
+            original_path = file_path
             file_path = file_path.with_suffix(suffix_map.get(mime_type, ".jpg"))
+            self.logger.debug(f"添加文件扩展名: {original_path} -> {file_path}")
 
         try:
             data = base64.b64decode(base64_data)
             file_path.parent.mkdir(parents=True, exist_ok=True)
             with open(file_path, "wb") as f:
                 f.write(data)
+            self.logger.info(f"图片已保存: {file_path}")
         except (OSError, ValueError) as exc:
+            self.logger.error(f"写入文件失败: {exc}", exc_info=True)
             return {"success": False, "error": f"写入文件失败: {exc}"}
 
         return {"success": True, "path": str(file_path)}
@@ -346,12 +439,17 @@ def get_resource_path(relative_path: str) -> str:
     """
     if hasattr(sys, "_MEIPASS"):  # PyInstaller
         base_path = sys._MEIPASS  # type: ignore
+        logger.debug(f"检测到 PyInstaller 环境: {base_path}")
     elif getattr(sys, "frozen", False):  # Nuitka
         base_path = os.path.dirname(sys.executable)
+        logger.debug(f"检测到 Nuitka 环境: {base_path}")
     else:  # 开发环境
         base_path = os.path.abspath(os.path.dirname(__file__))
+        logger.debug(f"开发环境: {base_path}")
 
-    return os.path.join(base_path, relative_path)
+    resource_path = os.path.join(base_path, relative_path)
+    logger.debug(f"资源路径: {resource_path}")
+    return resource_path
 
 
 def main() -> None:
@@ -359,6 +457,11 @@ def main() -> None:
 
     初始化 PyWebview 窗口并启动应用程序。
     """
+    logger.info("=" * 60)
+    logger.info("微信图片查看器启动")
+    logger.info(f"日志级别: {logging.getLevelName(LOG_LEVEL)}")
+    logger.info("=" * 60)
+
     freeze_support()  # Windows 多进程支持
 
     # 初始化 PyWebview API
@@ -366,7 +469,7 @@ def main() -> None:
 
     # 获取 index.html 的路径
     html_path = Path(get_resource_path("frontend/templates/index.html"))
-    print(f"加载界面文件: {html_path}")
+    logger.info(f"加载界面文件: {html_path}")
 
     global window
     window = webview.create_window(
@@ -379,9 +482,15 @@ def main() -> None:
         min_size=(800, 600),
     )
 
-    print("PyWebview 窗口即将启动...")
-    webview.start(debug=False)
-    print("PyWebview 窗口已关闭。")
+    logger.info("PyWebview 窗口即将启动...")
+    try:
+        webview.start(debug=False)
+    except Exception as e:
+        logger.critical(f"窗口启动失败: {e}", exc_info=True)
+        raise
+    finally:
+        logger.info("PyWebview 窗口已关闭")
+        logger.info("=" * 60)
 
 
 if __name__ == "__main__":

@@ -3,8 +3,8 @@
 
 支持三个版本的 .dat 文件解密:
 - v0: 仅使用 XOR 密钥 (微信 3.x 及更早版本)
-- v1: 使用固定 AES 密钥 + XOR 密钥 (微信 4.x)
-- v2: 使用动态 AES 密钥 + XOR 密钥 (微信 4.x 及更高版本)
+- v1: 使用固定 AES 密钥 + XOR 密钥 (微信 4.0.x)
+- v2: 使用动态 AES 密钥 + XOR 密钥 (微信 4.1.x 及更高版本)
 """
 
 import struct
@@ -13,10 +13,19 @@ from pathlib import Path
 from Crypto.Cipher import AES
 from Crypto.Util import Padding
 
+import numpy as np
+from numba import njit
+
+
+@njit(cache=True, fastmath=True)
+def _xor_inplace(buf, xor_byte):
+    for i in range(buf.size):
+        buf[i] ^= xor_byte
+
 
 def decrypt_dat_legacy(input_path: str | Path, xor_key: int) -> bytes:
     """
-    解密 v0 版本的 .dat 文件(仅 XOR 加密)。
+    解密 v0 版本的 .dat 文件(仅 XOR 加密)
 
     Args:
         input_path: 输入的 .dat 文件路径
@@ -24,12 +33,6 @@ def decrypt_dat_legacy(input_path: str | Path, xor_key: int) -> bytes:
 
     Returns:
         bytes: 解密后的原始数据
-
-    Raises:
-        OSError: 文件读取失败
-
-    Note:
-        对应微信版本 3.x 及更早版本
     """
     path = Path(input_path)
     file_size = path.stat().st_size
@@ -37,26 +40,14 @@ def decrypt_dat_legacy(input_path: str | Path, xor_key: int) -> bytes:
     if file_size == 0:
         return b""
 
-    result = bytearray(file_size)
+    xor_byte = xor_key & 0xFF
 
-    with path.open("rb") as f:
-        mv = memoryview(result)
-        offset = 0
+    data = np.fromfile(str(path), dtype=np.uint8)
+    if data.size == 0:
+        return b""
 
-        # 分块读取并解密
-        while offset < file_size:
-            read_count = f.readinto(mv[offset:])
-            if not read_count:
-                break
-
-            # 对当前块进行 XOR 解密
-            segment = mv[offset : offset + read_count]
-            for idx in range(read_count):
-                segment[idx] ^= xor_key
-
-            offset += read_count
-
-    return bytes(result)
+    _xor_inplace(data, np.uint8(xor_byte))
+    return data.tobytes()
 
 
 def decrypt_dat_new(
@@ -84,8 +75,8 @@ def decrypt_dat_new(
         OSError: 文件读取失败
 
     Note:
-        - v1: 使用固定 AES 密钥 (微信 4.x)
-        - v2: 需要提供动态 AES 密钥 (微信 4.x+)
+        - v1: 使用固定 AES 密钥 (微信 4.0.x)
+        - v2: 需要提供动态 AES 密钥 (微信 4.1.x+)
     """
     # v1 版本的固定 AES 密钥
     V1_AES_KEY = b"cfcd208495d565ef"
@@ -133,15 +124,13 @@ def decrypt_dat_new(
         if xor_size > len(tail_data):
             raise ValueError("Invalid xor_size in header")
 
-        # 分离原始数据和 XOR 加密数据
         raw_data = tail_data[:-xor_size]
-        xor_section = bytearray(tail_data[-xor_size:])
+        xor_section = tail_data[-xor_size:]
 
-        # 对 XOR 段进行解密
-        for idx in range(xor_size):
-            xor_section[idx] ^= xor_byte
+        xor_array = np.frombuffer(xor_section, dtype=np.uint8).copy()
+        _xor_inplace(xor_array, np.uint8(xor_byte))
 
-        result = decrypted_data + raw_data + bytes(xor_section)
+        result = decrypted_data + raw_data + xor_array.tobytes()
     else:
         result = decrypted_data + tail_data
 

@@ -104,88 +104,77 @@ rule AesKey {
 """
 
 
-# ==================== 内存操作函数 ====================
+# ==================== 进程句柄管理 ====================
 
 
-def open_process(pid: int) -> Optional[int]:
-    """
-    打开目标进程并返回进程句柄
+class ProcessHandleManager:
+    """微信进程句柄管理器,支持句柄复用"""
 
-    Args:
-        pid: 目标进程 ID
+    _instance = None
+    _lock = threading.Lock()
 
-    Returns:
-        进程句柄,失败则返回 None
-    """
-    return ctypes.windll.kernel32.OpenProcess(PROCESS_ALL_ACCESS, False, pid)
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
 
+    def __init__(self):
+        if self._initialized:
+            return
 
-def read_process_memory(
-    process_handle: int, address: int, size: int, chunk_size: int = READ_CHUNK_SIZE
-) -> Optional[bytes]:
-    """
-    读取目标进程内存数据
+        self._pm: Optional[pymem.Pymem] = None
+        self._pid: Optional[int] = None
+        self._initialized = True
 
-    Args:
-        process_handle: 进程句柄
-        address: 内存地址
-        size: 读取大小
-        chunk_size: 每次读取的块大小
+    def get_process(self) -> tuple[pymem.Pymem, int]:
+        """
+        获取微信进程对象和 PID,如果已存在则复用
 
-    Returns:
-        读取的内存数据,失败则返回 None
-    """
-    data = bytearray()
-    offset = 0
+        Returns:
+            (pymem.Pymem 对象, 进程 ID) 元组
 
-    while offset < size:
-        to_read = min(chunk_size, size - offset)
-        chunk_buffer = ctypes.create_string_buffer(to_read)
-        bytes_read = ctypes.c_size_t(0)
+        Raises:
+            RuntimeError: 找不到微信进程
+        """
+        if self._pm is not None and self._pid is not None:
+            try:
+                # 验证进程是否仍然存在
+                if self._pm.process_handle:
+                    return self._pm, self._pid
+            except Exception:
+                # 进程已关闭,需要重新打开
+                self._pm = None
+                self._pid = None
 
-        success = ReadProcessMemory(
-            process_handle,
-            ctypes.c_void_p(address + offset),
-            chunk_buffer,
-            to_read,
-            ctypes.byref(bytes_read),
-        )
+        try:
+            self._pm = pymem.Pymem("Weixin.exe")
+            self._pid = self._pm.process_id
+            assert isinstance(self._pid, int)
+            print(f"[+] 已打开微信进程,PID: {self._pid}")
+            return self._pm, self._pid
+        except Exception as e:
+            raise RuntimeError(f"找不到微信进程,请确保微信正在运行: {e}")
 
-        if not success or bytes_read.value == 0:
-            break
+    def close(self):
+        """关闭进程句柄"""
+        if self._pm is not None:
+            try:
+                self._pm.close_process()
+                print("[+] 已关闭微信进程句柄")
+            except Exception as e:
+                print(f"[-] 关闭进程句柄失败: {e}")
+            finally:
+                self._pm = None
+                self._pid = None
 
-        read_len = bytes_read.value
-        data.extend(chunk_buffer.raw[:read_len])
-        offset += read_len
+    def __enter__(self):
+        return self
 
-        if read_len < to_read:
-            break
-
-    return bytes(data) if data else None
-
-
-def get_memory_regions(process_handle: int) -> list[tuple[int, int]]:
-    """
-    获取进程的所有可读内存区域
-
-    Args:
-        process_handle: 进程句柄
-
-    Returns:
-        内存区域列表,每个元素为 (基地址, 区域大小) 元组
-    """
-    regions = []
-    mbi = MEMORY_BASIC_INFORMATION()
-    address = 0
-
-    while ctypes.windll.kernel32.VirtualQueryEx(
-        process_handle, ctypes.c_void_p(address), ctypes.byref(mbi), ctypes.sizeof(mbi)
-    ):
-        if mbi.State == MEM_COMMIT and mbi.Type == MEM_PRIVATE:
-            regions.append((int(mbi.BaseAddress), int(mbi.RegionSize)))
-        address += int(mbi.RegionSize)
-
-    return regions
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
 
 # ==================== 密钥验证和搜索 ====================
@@ -224,45 +213,11 @@ def load_yara_rules() -> yara.Rules:
     return yara.compile(source=YARA_RULE_SOURCE)
 
 
-def search_memory_chunk(
-    process_handle: int,
-    base_address: int,
-    region_size: int,
-    encrypted: bytes,
-    rules: yara.Rules,
-) -> Optional[bytes]:
-    """
-    在单个内存块中搜索 AES 密钥
-
-    Args:
-        process_handle: 进程句柄
-        base_address: 内存块基地址
-        region_size: 内存块大小
-        encrypted: 加密数据样本
-        rules: YARA 规则对象
-
-    Returns:
-        找到的密钥,未找到则返回 None
-    """
-    memory = read_process_memory(process_handle, base_address, region_size)
-    if not memory:
-        return None
-
-    matches = rules.match(data=memory)
-    if matches:
-        for match in matches:
-            if match.rule == "AesKey":
-                for string in match.strings:
-                    for instance in string.instances:
-                        content = instance.matched_data[1:-1]
-                        if verify(encrypted, content):
-                            return content[:16]
-    return None
-
-
 def get_aes_key(encrypted: bytes, pid: int) -> Optional[bytes]:
     """
     从微信进程内存中提取 AES 密钥
+
+    使用 YARA 的 pid 参数直接扫描进程内存,避免手动读取
 
     Args:
         encrypted: 加密数据样本
@@ -271,52 +226,35 @@ def get_aes_key(encrypted: bytes, pid: int) -> Optional[bytes]:
     Returns:
         AES 密钥,未找到则返回 None
     """
-    process_handle = open_process(pid)
-    if not process_handle:
-        print(f"[-] 无法打开进程 {pid}")
-        return None
+    try:
+        rules = load_yara_rules()
 
-    rules = load_yara_rules()
-    process_infos = get_memory_regions(process_handle)
+        # 直接使用 YARA 扫描进程内存
+        print(f"[+] 开始在进程 {pid} 中扫描 AES 密钥...")
+        matches = rules.match(pid=pid)
 
-    if not process_infos:
-        CloseHandle(process_handle)
-        return None
-
-    found_result = threading.Event()
-    result: list[Optional[bytes]] = [None]
-
-    def process_chunk(base_address: int, region_size: int) -> Optional[bytes]:
-        """处理单个内存块的回调函数"""
-        if found_result.is_set():
+        if not matches:
+            print(f"[-] 在进程 {pid} 中未找到有效的 AES 密钥")
             return None
 
-        res = search_memory_chunk(
-            process_handle, base_address, region_size, encrypted, rules
-        )
+        for match in matches:
+            if match.rule != "AesKey":
+                continue
 
-        if res:
-            result[0] = res
-            found_result.set()
+            for string in match.strings:
+                for instance in string.instances:
+                    content = instance.matched_data[1:-1]
+                    # 验证找到的密钥
+                    if verify(encrypted, content):
+                        print(f"[+] 在进程 {pid} 中找到有效的 AES 密钥")
+                        return content[:16]
 
-        return res
+        print(f"[-] 在进程 {pid} 中未找到有效的 AES 密钥")
+        return None
 
-    # 使用线程池并行搜索
-    max_workers = min(32, len(process_infos)) or 1
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [
-            executor.submit(process_chunk, base_address, region_size)
-            for base_address, region_size in process_infos
-        ]
-
-        for future in as_completed(futures):
-            res = future.result()
-            if res:
-                executor.shutdown(wait=False, cancel_futures=True)
-                break
-
-    CloseHandle(process_handle)
-    return result[0]
+    except Exception as e:
+        print(f"[-] YARA 扫描失败: {e}")
+        return None
 
 
 def dump_wechat_info_v4(encrypted: bytes, pid: int) -> bytes:
@@ -331,12 +269,8 @@ def dump_wechat_info_v4(encrypted: bytes, pid: int) -> bytes:
         AES 密钥
 
     Raises:
-        RuntimeError: 无法打开进程或未找到密钥
+        RuntimeError: 未找到密钥
     """
-    process_handle = open_process(pid)
-    if not process_handle:
-        raise RuntimeError(f"无法打开微信进程: {pid}")
-
     result = get_aes_key(encrypted, pid)
     if isinstance(result, bytes):
         return result[:16]
@@ -401,106 +335,107 @@ def find_key(
     assert version in [3, 4], "版本必须为 3 或 4"
     print(f"[+] 微信版本 {version}, 开始读取文件并收集密钥...")
 
-    # 查找所有模板文件 (_t.dat)
-    template_candidates = list(weixin_dir.rglob("*_t.dat"))
-    template_files = sort_template_files_by_date(template_candidates)
+    # 使用进程句柄管理器
+    handle_manager = ProcessHandleManager()
 
-    if not template_files:
-        raise RuntimeError("未找到模板文件")
+    try:
+        # 查找所有模板文件 (_t.dat)
+        template_candidates = list(weixin_dir.rglob("*_t.dat"))
+        template_files = sort_template_files_by_date(template_candidates)
 
-    recent_template_files = sort_template_files_by_date(template_candidates, limit=16)
+        if not template_files:
+            raise RuntimeError("未找到模板文件")
 
-    # ========== 提取 XOR 密钥 ==========
-    # 收集所有文件的最后两个字节
-    last_bytes_list = []
-    last_bytes_cache: dict[Path, bytes] = {}
+        recent_template_files = sort_template_files_by_date(
+            template_candidates, limit=16
+        )
 
-    for file in recent_template_files:
-        try:
-            with open(file, "rb") as f:
-                f.seek(-2, os.SEEK_END)
-                last_bytes = f.read(2)
+        # ========== 提取 XOR 密钥 ==========
+        # 收集所有文件的最后两个字节
+        last_bytes_list = []
 
-                if len(last_bytes) != 2:
-                    continue
+        for file in recent_template_files:
+            try:
+                with open(file, "rb") as f:
+                    f.seek(-2, os.SEEK_END)
+                    last_bytes = f.read(2)
 
-                last_bytes_list.append(last_bytes)
-                last_bytes_cache[file] = last_bytes
-        except Exception as e:
-            print(f"[-] 读取文件 {file} 失败: {e}")
-            continue
+                    if len(last_bytes) != 2:
+                        continue
 
-    if not last_bytes_list:
-        raise RuntimeError("未能成功读取任何模板文件以提取 XOR 密钥")
+                    last_bytes_list.append(last_bytes)
+            except Exception as e:
+                print(f"[-] 读取文件 {file} 失败: {e}")
+                continue
 
-    # 统计最常见的字节组合
-    counter = Counter(last_bytes_list)
-    most_common = counter.most_common(1)[0][0]
+        if not last_bytes_list:
+            raise RuntimeError("未能成功读取任何模板文件以提取 XOR 密钥")
 
-    x, y = most_common
-    if (xor_key := x ^ 0xFF) == y ^ 0xD9:
-        print(f"[+] 找到 XOR 密钥: 0x{xor_key:02X}")
-    else:
-        raise RuntimeError("未能找到有效的 XOR 密钥")
+        # 统计最常见的字节组合
+        counter = Counter(last_bytes_list)
+        most_common = counter.most_common(1)[0][0]
 
-    # 如果提供了已知密钥,进行验证
-    if xor_key_:
-        if xor_key_ == xor_key:
-            print("[+] XOR 密钥验证成功")
-            if aes_key_ is None:
-                raise RuntimeError("AES 密钥不能为 None")
-            return xor_key_, aes_key_
+        x, y = most_common
+        if (xor_key := x ^ 0xFF) == y ^ 0xD9:
+            print(f"[+] 找到 XOR 密钥: 0x{xor_key:02X}")
         else:
-            raise RuntimeError("XOR 密钥验证失败")
+            raise RuntimeError("未能找到有效的 XOR 密钥")
 
-    # 版本 3 使用固定的 AES 密钥
-    if version == 3:
-        return xor_key, b"cfcd208495d565ef"
+        # 如果提供了已知密钥,进行验证
+        if xor_key_:
+            if xor_key_ == xor_key:
+                print("[+] XOR 密钥验证成功")
+                if aes_key_ is None:
+                    raise RuntimeError("AES 密钥不能为 None")
+                return xor_key_, aes_key_
+            else:
+                raise RuntimeError("XOR 密钥验证失败")
 
-    # ========== 提取 AES 密钥 (版本 4) ==========
-    ciphertext = b""
+        # 版本 3 使用固定的 AES 密钥
+        if version == 3:
+            return xor_key, b"cfcd208495d565ef"
 
-    for file in template_files:
-        try:
-            with open(file, "rb") as f:
-                # 检查文件头
-                if f.read(6) != b"\x07\x08V2\x08\x07":
-                    continue
+        # ========== 提取 AES 密钥 (版本 4) ==========
+        ciphertext = b""
 
-                # 检查文件尾部字节
-                tail_bytes = last_bytes_cache.get(file)
-                if tail_bytes is None:
+        # 关键修复: 遍历所有文件,而不是依赖缓存
+        for file in template_files:
+            try:
+                with open(file, "rb") as f:
+                    # 检查文件头
+                    if f.read(6) != b"\x07\x08V2\x08\x07":
+                        continue
+
+                    # 检查文件尾部字节
                     f.seek(-2, os.SEEK_END)
                     tail_bytes = f.read(2)
-                    last_bytes_cache[file] = tail_bytes
 
-                if tail_bytes != most_common:
-                    continue
+                    if tail_bytes != most_common:
+                        continue
 
-                # 读取加密数据
-                f.seek(0xF)
-                ciphertext = f.read(16)
+                    # 读取加密数据
+                    f.seek(0xF)
+                    ciphertext = f.read(16)
 
-                if len(ciphertext) == 16:
-                    break
-        except Exception as e:
-            print(f"[-] 读取文件 {file} 失败: {e}")
-            continue
-    else:
-        raise RuntimeError("未能成功读取任何模板文件以提取 AES 密钥")
+                    if len(ciphertext) == 16:
+                        break
+            except Exception as e:
+                print(f"[-] 读取文件 {file} 失败: {e}")
+                continue
+        else:
+            raise RuntimeError("未能成功读取任何模板文件以提取 AES 密钥")
 
-    # 从微信进程内存中提取 AES 密钥
-    try:
-        pm = pymem.Pymem("Weixin.exe")
-        pid = pm.process_id
-        assert isinstance(pid, int)
-    except Exception:
-        raise RuntimeError("找不到微信进程,请确保微信正在运行")
+        # 从微信进程内存中提取 AES 密钥 (复用句柄)
+        _, pid = handle_manager.get_process()
+        aes_key = dump_wechat_info_v4(ciphertext, pid)
+        print(f"[+] 找到 AES 密钥: {aes_key.decode('ascii')}")
 
-    aes_key = dump_wechat_info_v4(ciphertext, pid)
-    print(f"[+] 找到 AES 密钥: {aes_key.hex()}")
+        return xor_key, aes_key
 
-    return xor_key, aes_key
+    finally:
+        # 确保资源释放 (可选: 如果需要保持句柄打开供后续使用,可以不调用 close)
+        # handle_manager.close()
+        pass
 
 
 # ==================== 配置文件操作 ====================
