@@ -33,43 +33,40 @@ jobs:
             **/uv.lock
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --extra nuitka
+
+      - name: Install Nuitka in venv
+        run: |
+          .\.venv\Scripts\activate
+          uv add nuitka ordered-set zstandard
 
       - name: Build WxDatDecryptApp with Nuitka
-        uses: Nuitka/Nuitka-Action@v1.4
-        with:
-          script-name: app.py
-          mode: onefile
-          output-dir: dist
-          output-file: WxDatDecryptApp.exe
-          include-data-dir: |
-            frontend/templates=frontend/templates
-            frontend/static=frontend/static
-          include-data-files: |
-            backend/src/wxam/VoipEngine.dll=backend/src/wxam/VoipEngine.dll
-          windows-icon-from-ico: frontend/static/icons/app.ico
-          windows-console-mode: disable
-          disable-cache: false
-          assume-yes-for-downloads: true
-          lto: yes
-          show-memory: true
-          report: compilation-report-app.xml
+        run: |
+          uv run python -m nuitka `
+            --onefile `
+            --output-dir=dist `
+            --output-filename=WxDatDecryptApp.exe `
+            --include-data-dir=frontend/templates=frontend/templates `
+            --include-data-dir=frontend/static=frontend/static `
+            --include-data-files=backend/src/wxam/VoipEngine.dll=backend/src/wxam/VoipEngine.dll `
+            --windows-icon-from-ico=frontend/static/icons/app.ico `
+            --windows-console-mode=disable `
+            --lto=yes `
+            --show-memory `
+            --report=compilation-report-app.xml `
+            app.py
 
       - name: Build WxDatDecryptTool with Nuitka
-        uses: Nuitka/Nuitka-Action@v1.4
-        with:
-          script-name: tool.py
-          mode: onefile
-          output-dir: dist
-          output-file: WxDatDecryptTool.exe
-          windows-icon-from-ico: frontend/static/icons/tool.ico
-          disable-cache: false
-          assume-yes-for-downloads: true
-
-          lto: yes
-
-          show-memory: true
-          report: compilation-report-tool.xml
+        run: |
+          uv run python -m nuitka `
+            --onefile `
+            --output-dir=dist `
+            --output-filename=WxDatDecryptTool.exe `
+            --windows-icon-from-ico=frontend/static/icons/tool.ico `
+            --lto=yes `
+            --show-memory `
+            --report=compilation-report-tool.xml `
+            tool.py
 
       - name: Collect executables
         run: |
