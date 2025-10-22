@@ -71,6 +71,10 @@ class WeixinInfo:
 info = WeixinInfo()
 
 
+# 添加类型注解
+window: Optional[webview.Window] = None
+
+
 class Api:
     """PyWebview 的 JavaScript API 接口类。
 
@@ -270,6 +274,63 @@ class Api:
                 return ""
 
         return base64.b64encode(data).decode("utf-8")
+
+    def save_image(
+        self, base64_data: str, suggested_name: str, mime_type: str
+    ) -> Dict[str, object]:
+        """保存 Base64 编码的图片到本地文件。
+
+        Args:
+            base64_data: Base64 编码的图片数据。
+            suggested_name: 建议的文件名。
+            mime_type: 图片的 MIME 类型。
+
+        Returns:
+            包含操作结果的字典。
+        """
+        if not base64_data:
+            return {"success": False, "error": "没有可保存的数据"}
+
+        # 检查 window 是否已初始化
+        if window is None:
+            return {"success": False, "error": "窗口未初始化"}
+
+        filename = (suggested_name or "image.jpg").strip()
+        dialog_result = window.create_file_dialog(
+            webview.FileDialog.SAVE,
+            save_filename=filename,
+        )
+
+        if not dialog_result:
+            return {"success": False, "error": "用户取消保存"}
+
+        # 正确处理返回的文件路径
+        file_path_str = (
+            dialog_result[0]
+            if isinstance(dialog_result, (list, tuple))
+            else str(dialog_result)
+        )
+        file_path = Path(file_path_str)
+
+        # 如果没有扩展名，根据 MIME 类型添加
+        if not file_path.suffix:
+            suffix_map = {
+                "image/png": ".png",
+                "image/gif": ".gif",
+                "image/bmp": ".bmp",
+                "image/x-icon": ".ico",
+            }
+            file_path = file_path.with_suffix(suffix_map.get(mime_type, ".jpg"))
+
+        try:
+            data = base64.b64decode(base64_data)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(file_path, "wb") as f:
+                f.write(data)
+        except (OSError, ValueError) as exc:
+            return {"success": False, "error": f"写入文件失败: {exc}"}
+
+        return {"success": True, "path": str(file_path)}
 
 
 def get_resource_path(relative_path: str) -> str:

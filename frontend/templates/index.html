@@ -533,6 +533,9 @@
                     <fluent-button id="viewer-reset-btn" appearance="outline" aria-label="重置图片视图">
                         重置视图
                     </fluent-button>
+                    <fluent-button id="viewer-save-btn" appearance="outline" aria-label="保存图片到本地">
+                        保存图片
+                    </fluent-button>
                     <fluent-button id="viewer-close-btn" appearance="accent" aria-label="关闭图片查看器">
                         关闭
                     </fluent-button>
@@ -546,6 +549,11 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <div id="image-context-menu" class="context-menu hidden" role="menu">
+        <fluent-button appearance="stealth" data-action="preview">预览图片</fluent-button>
+        <fluent-button appearance="stealth" data-action="save">保存图片</fluent-button>
     </div>
 
     <!-- Main application script. -->

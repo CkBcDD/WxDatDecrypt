@@ -496,3 +496,44 @@ main {
 ::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
 }
+
+/* ========================================================================
+   Context Menu Styles
+   ======================================================================== */
+
+/**
+ * Context menu for file and folder actions.
+ */
+.context-menu {
+    position: fixed;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    min-width: 160px;
+    padding: 4px;
+    border-radius: 8px;
+    background: var(--fill-color-layer-alt, #fff);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+}
+
+/**
+ * Hidden state for context menu.
+ */
+.context-menu.hidden {
+    display: none;
+}
+
+/**
+ * Context menu button styling.
+ */
+.context-menu fluent-button {
+    justify-content: flex-start;
+    width: 100%;
+}
+
+/**
+ * Ensure control part of button takes full width.
+ */
+.context-menu fluent-button::part(control) {
+    width: 100%;
+}

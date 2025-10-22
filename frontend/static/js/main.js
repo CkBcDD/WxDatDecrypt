@@ -84,9 +84,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /** @type {HTMLElement} 查看器关闭按钮 */
     const viewerCloseBtn = document.getElementById('viewer-close-btn');
-
     /** @type {HTMLElement} 查看器重置按钮 */
     const viewerResetBtn = document.getElementById('viewer-reset-btn');
+    /** @type {HTMLElement} 查看器保存按钮 */
+    const viewerSaveBtn = document.getElementById('viewer-save-btn');
+    /** @type {HTMLElement} 图片卡片右键菜单 */
+    const contextMenu = document.getElementById('image-context-menu');
 
     // ========================================================================
     // 常量定义
@@ -146,6 +149,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /** @type {{x: number, y: number}} 拖拽开始时的图片平移量 */
     let dragStartTranslate = { x: 0, y: 0 };
+
+    /** @type {string} 查看器当前图片的 Base64 数据 */
+    let viewerCurrentBase64 = '';
+
+    /** @type {string} 查看器当前图片的 MIME 类型 */
+    let viewerCurrentMimeType = 'image/jpeg';
+
+    /** @type {string} 查看器当前图片的默认文件名 */
+    let viewerCurrentFilename = 'image.jpg';
+
+    /** @type {{card: HTMLElement, base64: string, mimeType: string, filename: string}|null} */
+    let contextMenuPayload = null;
 
     // ========================================================================
     // 工具函数
@@ -210,9 +225,86 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'image/jpeg';
     }
 
-    // ========================================================================
-    // 视图切换
-    // ========================================================================
+    /**
+     * 根据 MIME 类型获取文件扩展名。
+     * @param {string} mimeType - 图片的 MIME 类型
+     * @return {string} 扩展名（不含点）
+     */
+    function getExtensionFromMimeType(mimeType) {
+        switch (mimeType) {
+            case 'image/png':
+                return 'png';
+            case 'image/gif':
+                return 'gif';
+            case 'image/bmp':
+                return 'bmp';
+            case 'image/x-icon':
+                return 'ico';
+            default:
+                return 'jpg';
+        }
+    }
+
+    function buildFilename(rawName, mimeType) {
+        const extension = getExtensionFromMimeType(mimeType);
+        let filename = (rawName || 'image').trim() || 'image';
+        if (filename.toLowerCase().endsWith('.dat')) {
+            filename = filename.slice(0, -4);
+        }
+        if (!filename.toLowerCase().endsWith(`.${extension}`)) {
+            filename += `.${extension}`;
+        }
+        return filename;
+    }
+
+    async function performSave(base64, filename, mimeType) {
+        if (!base64) {
+            alert('图片尚未加载完成，无法保存。');
+            return false;
+        }
+        if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.save_image) {
+            alert('保存功能不可用。');
+            return false;
+        }
+        try {
+            const response = await window.pywebview.api.save_image(base64, filename, mimeType);
+            if (!response || !response.success) {
+                alert(response?.error || '保存失败。');
+                return false;
+            }
+            return true;
+        } catch (error) {
+            console.error('performSave: 调用保存接口失败', error);
+            alert('保存失败。');
+            return false;
+        }
+    }
+
+    function hideContextMenu() {
+        if (!contextMenu || contextMenu.classList.contains('hidden')) {
+            return;
+        }
+        contextMenu.classList.add('hidden');
+        contextMenuPayload = null;
+    }
+
+    function showContextMenu(clientX, clientY) {
+        if (!contextMenu || !contextMenuPayload) {
+            return;
+        }
+        contextMenu.classList.remove('hidden');
+        const menuRect = contextMenu.getBoundingClientRect();
+        let left = clientX;
+        let top = clientY;
+        if (left + menuRect.width > window.innerWidth) {
+            left = window.innerWidth - menuRect.width - 4;
+        }
+        if (top + menuRect.height > window.innerHeight) {
+            top = window.innerHeight - menuRect.height - 4;
+        }
+        contextMenu.style.left = `${Math.max(left, 0)}px`;
+        contextMenu.style.top = `${Math.max(top, 0)}px`;
+    }
 
     /**
      * 在主页视图和文件夹视图之间切换。
@@ -346,6 +438,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         isLoading = true;
+
+        hideContextMenu();
 
         if (isViewerOpen) {
             closeImageViewer();
@@ -503,14 +597,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         card.addEventListener('click', () => {
+            hideContextMenu();
             if (card.classList.contains('is-loading')) {
                 return;
             }
-            const base64Data = img.dataset.base64;
+            const base64Data = card.dataset.base64 || img.dataset.base64;
             if (!base64Data) {
                 return;
             }
-            openImageViewer(base64Data, img.dataset.mimeType || 'image/jpeg', caption.textContent);
+            openImageViewer(
+                base64Data,
+                card.dataset.mimeType || img.dataset.mimeType || 'image/jpeg',
+                caption.textContent
+            );
+        });
+
+        card.addEventListener('contextmenu', (event) => {
+            if (card.classList.contains('is-loading')) {
+                return;
+            }
+            const base64 = card.dataset.base64;
+            if (!base64) {
+                return;
+            }
+            event.preventDefault();
+            contextMenuPayload = {
+                card,
+                base64,
+                mimeType: card.dataset.mimeType || 'image/jpeg',
+                filename: card.dataset.filename || 'image.jpg',
+            };
+            showContextMenu(event.clientX, event.clientY);
         });
 
         fetchAndSetImage(relPath, img);
@@ -577,11 +694,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
             imgElement.dataset.base64 = base64;
             imgElement.dataset.mimeType = mimeType;
+            const card = imgElement.closest('.image-card');
+            if (card) {
+                card.dataset.base64 = base64;
+                card.dataset.mimeType = mimeType;
+                const captionText = card.querySelector('.caption')?.textContent || 'image';
+                card.dataset.filename = buildFilename(captionText, mimeType);
+            }
+
             imgElement.src = `data:${mimeType};base64,${base64}`;
         } catch (error) {
             console.error(`fetchAndSetImage: 无法加载图片 ${relPath}:`, error);
             const card = imgElement.closest('.image-card');
             if (card) {
+                delete card.dataset.base64;
+                delete card.dataset.mimeType;
+                delete card.dataset.filename;
                 const placeholder = card.querySelector('.image-placeholder');
                 if (placeholder) {
                     placeholder.innerHTML = '加载失败';
@@ -602,6 +730,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} captionText - 图片标题
      */
     function openImageViewer(base64, mimeType, captionText) {
+        hideContextMenu();
         if (!imageViewer || !viewerImage || !viewerStage || !viewerWrapper) {
             return;
         }
@@ -616,6 +745,11 @@ document.addEventListener('DOMContentLoaded', () => {
         imageViewer.classList.remove('hidden');
         viewerCaption.textContent = captionText || '';
         viewerImage.src = `data:${mimeType};base64,${base64}`;
+
+        const filename = buildFilename(captionText, mimeType);
+        viewerCurrentBase64 = base64;
+        viewerCurrentMimeType = mimeType || 'image/jpeg';
+        viewerCurrentFilename = filename;
     }
 
     /**
@@ -634,6 +768,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (viewerImage) {
             viewerImage.src = '';
         }
+
+        viewerCurrentBase64 = '';
+        viewerCurrentMimeType = 'image/jpeg';
+        viewerCurrentFilename = 'image.jpg';
     }
 
     /**
@@ -677,6 +815,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         event.preventDefault();
+        event.stopPropagation();
         viewerDragging = true;
         viewerStage?.classList.add('grabbing');
         dragStartPoint = { x: event.clientX, y: event.clientY };
@@ -692,6 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        event.preventDefault();
         viewerTranslate.x = dragStartTranslate.x + (event.clientX - dragStartPoint.x);
         viewerTranslate.y = dragStartTranslate.y + (event.clientY - dragStartPoint.y);
         applyViewerTransform();
@@ -752,6 +892,17 @@ document.addEventListener('DOMContentLoaded', () => {
         applyViewerTransform();
     }
 
+    /**
+     * 保存当前查看器中的图片。
+     */
+    async function saveCurrentViewerImage() {
+        if (!viewerCurrentBase64) {
+            alert('图片尚未加载完成，无法保存。');
+            return;
+        }
+        await performSave(viewerCurrentBase64, viewerCurrentFilename, viewerCurrentMimeType);
+    }
+
     // ========================================================================
     // 事件监听器
     // ========================================================================
@@ -792,6 +943,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     viewerCloseBtn?.addEventListener('click', closeImageViewer);
     viewerResetBtn?.addEventListener('click', () => resetViewerTransform(true));
+    viewerSaveBtn?.addEventListener('click', saveCurrentViewerImage);
     viewerBackdrop?.addEventListener('click', closeImageViewer);
     viewerStage?.addEventListener('wheel', handleViewerWheel, { passive: false });
     viewerStage?.addEventListener('mousedown', startViewerDrag);
@@ -813,10 +965,13 @@ document.addEventListener('DOMContentLoaded', () => {
             width: viewerImage.naturalWidth,
             height: viewerImage.naturalHeight
         };
-        resetViewerTransform(true);
+        requestAnimationFrame(() => {
+            resetViewerTransform(true);
+        });
     });
 
     dirTree.addEventListener('click', (e) => {
+        hideContextMenu();
         const clickedItem = e.target.closest('fluent-tree-item');
         if (clickedItem) {
             selectTreeNode(clickedItem);
@@ -824,12 +979,50 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     breadcrumb.addEventListener('click', (e) => {
+        hideContextMenu();
         const targetItem = e.target.closest('fluent-breadcrumb-item');
         if (targetItem && targetItem.dataset.path) {
             const path = targetItem.dataset.path.replace(/\\/g, '\\\\');
             const nodeElement = dirTree.querySelector(`fluent-tree-item[data-path="${path}"]`);
             if (nodeElement) {
                 selectTreeNode(nodeElement);
+            }
+        }
+    });
+
+    document.addEventListener('click', (event) => {
+        if (contextMenu && !contextMenu.contains(event.target)) {
+            hideContextMenu();
+        }
+    });
+
+    contextMenu?.addEventListener('click', (event) => {
+        const actionEl = event.target.closest('[data-action]');
+        if (!actionEl || !contextMenuPayload) {
+            return;
+        }
+        event.stopPropagation();
+        const { base64, mimeType, filename, card } = contextMenuPayload;
+        hideContextMenu();
+        const captionText = card.querySelector('.caption')?.textContent || '';
+        if (actionEl.dataset.action === 'preview') {
+            openImageViewer(base64, mimeType, captionText);
+        } else if (actionEl.dataset.action === 'save') {
+            performSave(base64, filename, mimeType);
+        }
+    });
+
+    scrollContainer?.addEventListener('scroll', hideContextMenu);
+    window.addEventListener('resize', hideContextMenu);
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            if (contextMenu && !contextMenu.classList.contains('hidden')) {
+                hideContextMenu();
+                return;
+            }
+            if (isViewerOpen) {
+                closeImageViewer();
             }
         }
     });
