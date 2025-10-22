@@ -1,7 +1,7 @@
 [project]
 name = "WxDatDecrypt"
 version = "2.0.5"
-description = "解密与查看微信 4.1 的图片，将微信缓存的 dat 文件解密为原始图片格式"
+description = "解密与查看新旧微信的图片，将微信缓存的 dat 文件解密为原始图片格式"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
