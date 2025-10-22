@@ -28,7 +28,10 @@ jobs:
         uses: astral-sh/setup-uv@v1
         with:
           enable-cache: true
-          cache-dependency-glob: "uv.lock"
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/uv.lock
+          ignore-nothing-to-cache: true
 
       - name: Install dependencies
         run: uv sync
@@ -52,7 +55,7 @@ jobs:
 
           lto: yes
           jobs: -1
- 
+
           noinclude-setuptools-mode: error
           noinclude-pytest-mode: error
           noinclude-unittest-mode: nofollow
