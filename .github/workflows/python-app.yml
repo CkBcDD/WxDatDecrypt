@@ -67,15 +67,6 @@ jobs:
           assume-yes-for-downloads: true
 
           lto: yes
-          jobs: -1
-
-          noinclude-setuptools-mode: error
-          noinclude-pytest-mode: error
-          noinclude-unittest-mode: nofollow
-          noinclude-pydoc-mode: error
-          noinclude-IPython-mode: error
-
-          python-flag: no_docstrings,no_asserts
 
           show-memory: true
           report: compilation-report-tool.xml
