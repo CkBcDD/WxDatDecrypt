@@ -33,18 +33,33 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Build executables with PyInstaller
-        run: |
-          uv run --with pyinstaller pyinstaller app.py `
-            --noconfirm --onefile --name WxDatDecryptApp `
-            --add-data "frontend/templates;frontend/templates" `
-            --add-data "frontend/static;frontend/static" `
-            --add-binary "backend/src/wxam/VoipEngine.dll;backend/src/wxam" `
-            --icon "frontend/static/icons/app.ico"
+      - name: Build WxDatDecryptApp with Nuitka
+        uses: Nuitka/Nuitka-Action@v1.4
+        with:
+          script-name: app.py
+          mode: onefile
+          output-dir: dist
+          output-file: WxDatDecryptApp.exe
+          include-data-dir: |
+            frontend/templates=frontend/templates
+            frontend/static=frontend/static
+          include-data-files: |
+            backend/src/wxam/VoipEngine.dll=backend/src/wxam/VoipEngine.dll
+          windows-icon-from-ico: frontend/static/icons/app.ico
+          windows-console-mode: disable
+          disable-cache: false
+          assume-yes-for-downloads: true
 
-          uv run --with pyinstaller pyinstaller tool.py `
-            --noconfirm --onefile --name WxDatDecryptTool `
-            --icon "frontend/static/icons/tool.ico"
+      - name: Build WxDatDecryptTool with Nuitka
+        uses: Nuitka/Nuitka-Action@v1.4
+        with:
+          script-name: tool.py
+          mode: onefile
+          output-dir: dist
+          output-file: WxDatDecryptTool.exe
+          windows-icon-from-ico: frontend/static/icons/tool.ico
+          disable-cache: false
+          assume-yes-for-downloads: true
 
       - name: Collect executables
         run: |
