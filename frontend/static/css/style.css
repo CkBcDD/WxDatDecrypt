@@ -1,114 +1,180 @@
+/**
+ * @fileoverview Main stylesheet for WxDatDecrypt frontend application.
+ * Provides Fluent Design inspired UI with custom layouts including waterfall
+ * image gallery, navigation sidebar, and image viewer modal.
+ * @author WxDatDecrypt Team
+ */
+
+/* ========================================================================
+   CSS Variables (Design Tokens)
+   ======================================================================== */
+
 :root {
+    /* Color palette */
     --neutral-layer-1: #f5f5f5;
+    /* Background - lightest */
     --neutral-layer-2: #ffffff;
+    /* Surface - white */
     --neutral-layer-3: #ebebeb;
+    /* Background - light gray */
     --neutral-foreground-rest: #1f1f1f;
+    /* Text color */
     --neutral-stroke-layer-rest: #d1d1d1;
+    /* Border color */
+
+    /* Layout tokens */
     --control-corner-radius: 8px;
+
+    /* Typography */
     --type-ramp-minus-1-line-height: 1.4;
-    /* 设置浅灰色背景 */
 }
 
+/* ========================================================================
+   Base Styles
+   ======================================================================== */
+
+/**
+ * Base body styles with Fluent Design typography.
+ */
 body {
     margin: 0;
-    font-family: "Segoe UI", "Segoe UI Web (West European)", "Helvetica Neue", sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    font-family: 'Segoe UI', 'Segoe UI Web (West European)', 'Helvetica Neue',
+        sans-serif;
+    font-size: 16px;
     color: var(--neutral-foreground-rest);
     background-color: var(--neutral-layer-1);
-    font-size: 16px;
-    /* 增加基础字体大小 */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
-/* --- 布局样式 --- */
+/* ========================================================================
+   Layout Components
+   ======================================================================== */
+
+/**
+ * Main application container with flexbox layout.
+ * Creates a full-height container with navigation sidebar.
+ */
 .app-container {
     display: flex;
     height: 100vh;
     overflow: hidden;
 }
 
+/**
+ * Vertical navigation bar positioned on the left side.
+ * Contains navigation buttons arranged vertically.
+ */
 .nav-bar {
     display: flex;
     flex-direction: column;
     align-items: center;
     width: 64px;
-    /* 增加导航栏宽度 */
     padding: 16px 0;
-    /* 上下16px padding */
     background-color: var(--neutral-layer-2);
     border-right: 1px solid var(--neutral-stroke-layer-rest);
 }
 
+/**
+ * Navigation buttons styling.
+ * Square buttons with consistent spacing.
+ */
 .nav-bar fluent-button {
-    margin-bottom: 8px;
     width: 48px;
-    /* 设置按钮宽度 */
     height: 48px;
-    /* 设置按钮高度，使其成为正方形 */
+    margin-bottom: 8px;
 }
 
-/* 解决内联样式问题：为导航按钮内的图标定义一个类 */
+/**
+ * Icon wrapper for navigation buttons.
+ * Centers icons within the button container.
+ */
 .nav-icon {
-    font-size: 24px;
-    /* 或者你想要的任何大小，例如 20px, 28px 等 */
-    /* 确保图标在div中居中，如果需要的话 */
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 24px;
 }
 
+/**
+ * Main content area that fills remaining space.
+ */
 main {
-    flex: 1;
     display: flex;
-    /* 让 main 的子元素可以撑满 */
+    flex: 1;
     min-width: 0;
 }
 
+/* ========================================================================
+   View Components
+   ======================================================================== */
+
+/**
+ * Base view container for different application views.
+ * Centers content by default for empty states.
+ */
 .view {
-    width: 100%;
-    height: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    width: 100%;
+    height: 100%;
     text-align: center;
 }
 
+/**
+ * Hidden state for views.
+ */
 .view.hidden {
     display: none;
 }
 
-/* 解决内联样式问题：为主页视图中的元素添加样式 */
+/**
+ * Home view select folder button spacing.
+ */
 #select-folder-btn {
     margin-top: 24px;
 }
 
+/**
+ * Current folder information display styling.
+ */
 #current-folder-info {
     margin-top: 16px;
     font-size: 16px;
-    /* 增加当前目录信息字体大小 */
 }
 
-
+/**
+ * Folder view with sidebar and content panel layout.
+ */
 #folder-view {
     flex-direction: row;
     align-items: stretch;
 }
 
+/* ========================================================================
+   Sidebar Components
+   ======================================================================== */
+
+/**
+ * Left sidebar containing directory tree.
+ * Responsive width with min/max constraints.
+ */
 .sidebar {
-    width: 30%;
-    /* 目录占30%宽度 */
-    min-width: 200px;
-    /* 设置最小宽度以防过小 */
-    max-width: 400px;
-    /* 设置最大宽度以防过大 */
-    background-color: var(--neutral-layer-2);
-    border-right: 1px solid var(--neutral-stroke-layer-rest);
     display: flex;
     flex-direction: column;
+    width: 30%;
+    min-width: 200px;
+    max-width: 400px;
+    background-color: var(--neutral-layer-2);
+    border-right: 1px solid var(--neutral-stroke-layer-rest);
     flex-shrink: 0;
 }
 
+/**
+ * Sidebar header with title or controls.
+ */
 .sidebar-header {
     padding: 12px;
     font-weight: 600;
@@ -116,42 +182,62 @@ main {
     flex-shrink: 0;
 }
 
+/**
+ * Directory tree container with scrolling.
+ */
 #dir-tree-container {
-    padding: 4px;
-    overflow-y: auto;
     flex-grow: 1;
+    padding: 4px;
     font-size: 16px;
-    /* 增加目录树字体大小 */
+    overflow-y: auto;
 }
 
+/* ========================================================================
+   Content Panel Components
+   ======================================================================== */
+
+/**
+ * Main content panel displaying images and breadcrumbs.
+ */
 .content-panel {
-    flex: 1;
     display: flex;
+    flex: 1;
     flex-direction: column;
     min-width: 0;
     background-color: var(--neutral-layer-1);
 }
 
+/**
+ * Breadcrumb navigation container.
+ */
 #breadcrumb-container {
-    padding: 0 12px;
-    height: 56px;
-    /* 增加面包屑容器高度 */
     display: flex;
     align-items: center;
+    height: 56px;
+    padding: 0 12px;
+    font-size: 18px;
+    background-color: var(--neutral-layer-2);
     border-bottom: 1px solid var(--neutral-stroke-layer-rest);
     flex-shrink: 0;
-    background-color: var(--neutral-layer-2);
-    font-size: 18px;
-    /* 增加面包屑字体大小 */
 }
 
+/**
+ * Scrollable container for image gallery.
+ */
 .gallery-scroll-container {
     flex-grow: 1;
-    overflow-y: auto;
     padding: 16px;
+    overflow-y: auto;
 }
 
-/* --- 网格布局样式 --- */
+/* ========================================================================
+   Image Gallery - Grid Layout
+   ======================================================================== */
+
+/**
+ * Grid layout mode for image gallery.
+ * Responsive grid with auto-fill columns.
+ */
 #image-gallery.grid-layout {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -160,76 +246,98 @@ main {
     padding: 0 8px;
 }
 
+/**
+ * Remove column wrapper in grid mode.
+ */
 #image-gallery.grid-layout .image-column {
     display: contents;
-    /* 让列在网格模式下消失 */
 }
 
+/**
+ * Image card styling for grid layout.
+ */
 #image-gallery.grid-layout .image-card {
     display: flex;
     flex-direction: column;
 }
 
+/**
+ * Image and placeholder styling in grid mode.
+ * Maintains 1:1 aspect ratio.
+ */
 #image-gallery.grid-layout .image-card img,
 #image-gallery.grid-layout .image-card .image-placeholder {
-    aspect-ratio: 1 / 1;
     width: 100%;
+    aspect-ratio: 1 / 1;
     object-fit: cover;
 }
 
-/* --- JS-driven Waterfall Layout Styles --- */
+/* ========================================================================
+   Image Gallery - Waterfall Layout
+   ======================================================================== */
+
+/**
+ * JavaScript-driven waterfall (masonry) layout.
+ * Uses flex columns for dynamic height distribution.
+ */
 #image-gallery {
     display: flex;
-    gap: 16px;
-    /* 列之间的间距 */
     align-items: flex-start;
-    /* 关键：让列从顶部开始对齐 */
     width: 100%;
-    box-sizing: border-box;
+    gap: 16px;
     padding: 0 8px;
-    /* 添加左右内边距 */
+    box-sizing: border-box;
 }
 
+/**
+ * Individual column in waterfall layout.
+ */
 .image-column {
-    flex: 1;
     display: flex;
+    flex: 1;
     flex-direction: column;
     gap: 16px;
-    /* 图片卡片之间的垂直间距 */
 }
 
+/**
+ * Image card container.
+ * Contains image and optional caption.
+ */
 .image-card {
-    padding: 8px;
     width: 100%;
-    /* 填满列宽 */
+    padding: 8px;
     box-sizing: border-box;
     cursor: zoom-in;
 }
 
-/* --- Lazy Loading Placeholder Styles (Unchanged) --- */
+/**
+ * Placeholder shown during lazy loading.
+ */
 .image-placeholder {
-    width: 100%;
-    aspect-ratio: 2 / 3;
-    background-color: var(--neutral-layer-3);
-    border-radius: var(--control-corner-radius);
     display: none;
     justify-content: center;
     align-items: center;
+    width: 100%;
+    aspect-ratio: 2 / 3;
     color: var(--neutral-foreground-rest);
+    background-color: var(--neutral-layer-3);
+    border-radius: var(--control-corner-radius);
 }
 
+/**
+ * Actual image element styling.
+ */
 .image-card img {
+    display: block;
     width: 100%;
     height: auto;
-    border-radius: var(--control-corner-radius);
     background-color: var(--neutral-layer-3);
-    display: block;
+    border-radius: var(--control-corner-radius);
 }
 
-.image-placeholder {
-    display: none;
-}
-
+/**
+ * Loading state: hide image, show placeholder.
+ */
 .image-card.is-loading img {
     display: none;
 }
@@ -238,17 +346,27 @@ main {
     display: flex;
 }
 
+/**
+ * Image caption with ellipsis overflow.
+ */
 .image-card .caption {
+    margin-top: 8px;
     font-size: 14px;
     line-height: var(--type-ramp-minus-1-line-height);
     text-align: center;
-    margin-top: 8px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-/* --- Image Viewer Styles --- */
+/* ========================================================================
+   Image Viewer Modal
+   ======================================================================== */
+
+/**
+ * Full-screen image viewer overlay.
+ * Includes backdrop, toolbar, and zoomable image stage.
+ */
 #image-viewer {
     position: fixed;
     inset: 0;
@@ -258,10 +376,16 @@ main {
     justify-content: center;
 }
 
+/**
+ * Hidden state for image viewer.
+ */
 #image-viewer.hidden {
     display: none;
 }
 
+/**
+ * Semi-transparent backdrop with blur effect.
+ */
 #image-viewer .viewer-backdrop {
     position: absolute;
     inset: 0;
@@ -269,6 +393,10 @@ main {
     backdrop-filter: blur(2px);
 }
 
+/**
+ * Main viewer content container.
+ * Responsive size with max dimensions.
+ */
 #image-viewer .viewer-content {
     position: relative;
     display: flex;
@@ -281,6 +409,9 @@ main {
     overflow: hidden;
 }
 
+/**
+ * Toolbar at top of viewer with controls.
+ */
 .viewer-toolbar {
     display: flex;
     align-items: center;
@@ -291,23 +422,35 @@ main {
     flex-shrink: 0;
 }
 
+/**
+ * Action buttons container in toolbar.
+ */
 .viewer-toolbar-actions {
     display: flex;
     gap: 8px;
 }
 
+/**
+ * Image display stage with pan/zoom support.
+ */
 #viewer-stage {
     position: relative;
     flex: 1;
-    overflow: hidden;
     background: var(--neutral-layer-2);
+    overflow: hidden;
     cursor: grab;
 }
 
+/**
+ * Active dragging state cursor.
+ */
 #viewer-stage.grabbing {
     cursor: grabbing;
 }
 
+/**
+ * Wrapper for transformed image element.
+ */
 #viewer-image-wrapper {
     position: absolute;
     top: 0;
@@ -315,6 +458,10 @@ main {
     transform-origin: top left;
 }
 
+/**
+ * The actual image element in viewer.
+ * Prevents default interactions for custom pan/zoom.
+ */
 #viewer-image {
     display: block;
     max-width: none;
@@ -323,17 +470,29 @@ main {
     pointer-events: none;
 }
 
-/* 自定义滚动条 */
+/* ========================================================================
+   Scrollbar Customization
+   ======================================================================== */
+
+/**
+ * Custom webkit scrollbar dimensions.
+ */
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
 }
 
+/**
+ * Scrollbar thumb (draggable part) styling.
+ */
 ::-webkit-scrollbar-thumb {
     background: #c1c1c1;
     border-radius: 3px;
 }
 
+/**
+ * Scrollbar thumb hover state.
+ */
 ::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
 }

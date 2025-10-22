@@ -6,19 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>微信图片查看器</title>
 
-    <!-- 1. 引入 Fluent UI Web Components -->
+    <!-- Fluent UI Web Components library. -->
     <script type="module" src="https://npm.elemecdn.com/@fluentui/web-components"></script>
 
-    <!-- 2. 链接到外部样式表 -->
+    <!-- Main stylesheet. -->
     <link rel="stylesheet" href="../static/css/style.css">
 </head>
 
 <body>
     <fluent-design-system-provider>
         <div class="app-container">
-            <!-- 左侧导航栏 -->
+            <!-- Navigation sidebar. -->
             <nav class="nav-bar">
-                <fluent-button id="home-btn" appearance="transparent" title="主页">
+                <!-- Home button. -->
+                <fluent-button id="home-btn" appearance="transparent" title="主页" aria-label="返回主页">
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">
                         <path
                             d="M6.09192 4.42812C6.09192 4.23482 6.24862 4.07812 6.44192 4.07812H9.79061C9.98391 4.07812 10.1406 4.23483 10.1406 4.42812V14.7308H6.09192V4.42812Z"
@@ -370,7 +371,9 @@
                         </defs>
                     </svg>
                 </fluent-button>
-                <fluent-button id="folder-btn" appearance="transparent" title="文件夹">
+
+                <!-- Folder button. -->
+                <fluent-button id="folder-btn" appearance="transparent" title="文件夹" aria-label="选择文件夹">
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">
                         <g filter="url(#filter0_ii_18_22534)">
                             <path
@@ -456,12 +459,12 @@
                 </fluent-button>
             </nav>
 
-            <!-- 主内容区 -->
+            <!-- Main content area. -->
             <main>
-                <!-- 主页视图 -->
-                <div id="home-view" class="view">
+                <!-- Home view. -->
+                <div id="home-view" class="view" role="main">
                     <fluent-image fit="contain">
-                        <img alt="Viewer" src="../static/images/photo.png" />
+                        <img alt="微信图片查看器预览图" src="../static/images/photo.png">
                     </fluent-image>
                     <fluent-text size="1200">
                         <h1>微信图片查看器</h1>
@@ -469,43 +472,46 @@
                     <fluent-text>
                         <p>请选择一个根目录以开始浏览图片。</p>
                     </fluent-text>
-                    <fluent-button id="select-folder-btn" appearance="accent">
+                    <fluent-button id="select-folder-btn" appearance="accent" aria-label="选择文件夹开始浏览">
                         选择文件夹
                     </fluent-button>
-                    <p id="current-folder-info"></p>
+                    <p id="current-folder-info" aria-live="polite"></p>
                 </div>
 
-                <!-- 文件夹视图 (默认隐藏) -->
-                <div id="folder-view" class="view hidden">
-                    <!-- 左侧目录树面板 -->
-                    <aside class="sidebar">
+                <!-- Folder view (hidden by default). -->
+                <div id="folder-view" class="view hidden" role="main">
+                    <!-- Directory tree sidebar. -->
+                    <aside class="sidebar" aria-label="目录导航">
                         <div class="sidebar-header">目录</div>
                         <div id="dir-tree-container">
-                            <fluent-tree id="dir-tree"></fluent-tree>
+                            <fluent-tree id="dir-tree" role="tree" aria-label="文件夹目录树"></fluent-tree>
                         </div>
                     </aside>
 
-                    <!-- 右侧图片展示面板 -->
+                    <!-- Image display panel. -->
                     <section class="content-panel">
-                        <!-- 面包屑导航 -->
+                        <!-- Breadcrumb navigation. -->
                         <div id="breadcrumb-container">
-                            <fluent-breadcrumb id="breadcrumb"></fluent-breadcrumb>
+                            <fluent-breadcrumb id="breadcrumb" aria-label="当前位置"></fluent-breadcrumb>
                             <div style="margin-left: auto; display: flex; gap: 8px; align-items: center;">
                                 <fluent-text>布局:</fluent-text>
-                                <fluent-button id="layout-toggle-btn" appearance="stealth" title="切换布局模式">
+                                <!-- Layout toggle button. -->
+                                <fluent-button id="layout-toggle-btn" appearance="stealth" title="切换布局模式"
+                                    aria-label="切换布局模式">
                                     <svg id="layout-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-                                        viewBox="0 0 20 20" fill="currentColor">
-                                        <!-- 瀑布流图标 -->
+                                        viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <!-- Masonry layout icon. -->
                                         <path
                                             d="M3 2h4v6H3V2zm0 8h4v8H3v-8zm6-8h4v4H9V2zm0 6h4v10H9V8zm6-6h4v8h-4V2zm0 10h4v6h-4v-6z" />
                                     </svg>
                                 </fluent-button>
                             </div>
                         </div>
-                        <!-- 图片滚动容器 -->
+
+                        <!-- Image scroll container. -->
                         <div class="gallery-scroll-container">
-                            <!-- JS驱动的瀑布流画廊 -->
-                            <div id="image-gallery"></div>
+                            <!-- JS-driven masonry gallery. -->
+                            <div id="image-gallery" role="list" aria-label="图片画廊"></div>
                         </div>
                     </section>
                 </div>
@@ -513,26 +519,37 @@
         </div>
     </fluent-design-system-provider>
 
-    <div id="image-viewer" class="dialog hidden">
+    <!-- Image viewer dialog (modal). -->
+    <div id="image-viewer" class="dialog hidden" aria-hidden="true">
+        <!-- Backdrop overlay. -->
         <div class="viewer-backdrop"></div>
-        <div class="viewer-content" role="dialog" aria-modal="true">
+
+        <!-- Viewer content. -->
+        <div class="viewer-content" role="dialog" aria-modal="true" aria-labelledby="viewer-caption">
+            <!-- Viewer toolbar. -->
             <div class="viewer-toolbar">
                 <fluent-text id="viewer-caption"></fluent-text>
                 <div class="viewer-toolbar-actions">
-                    <fluent-button id="viewer-reset-btn" appearance="outline">重置视图</fluent-button>
-                    <fluent-button id="viewer-close-btn" appearance="accent">关闭</fluent-button>
+                    <fluent-button id="viewer-reset-btn" appearance="outline" aria-label="重置图片视图">
+                        重置视图
+                    </fluent-button>
+                    <fluent-button id="viewer-close-btn" appearance="accent" aria-label="关闭图片查看器">
+                        关闭
+                    </fluent-button>
                 </div>
             </div>
-            <div id="viewer-stage" tabindex="0">
+
+            <!-- Image stage. -->
+            <div id="viewer-stage" tabindex="0" role="img" aria-label="图片预览区域">
                 <div id="viewer-image-wrapper">
-                    <img id="viewer-image" alt="预览图像" draggable="false" />
+                    <img id="viewer-image" alt="预览图像" draggable="false">
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Main application script. -->
     <script defer src="../static/js/main.js"></script>
-
 </body>
 
 </html>

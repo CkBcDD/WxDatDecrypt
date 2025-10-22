@@ -1,4 +1,4 @@
-"""WxDatDecrypt backend package."""
+"""src package"""
 
 from .decrypt import decrypt_dat
 from .key import find_key
