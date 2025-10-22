@@ -31,7 +31,6 @@ jobs:
           cache-dependency-glob: |
             **/pyproject.toml
             **/uv.lock
-          ignore-nothing-to-cache: true
 
       - name: Install dependencies
         run: uv sync
