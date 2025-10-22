@@ -33,7 +33,7 @@ jobs:
             **/uv.lock
 
       - name: Install dependencies
-        run: uv sync --extra nuitka
+        run: uv sync
 
       - name: Install Nuitka in venv
         run: |
