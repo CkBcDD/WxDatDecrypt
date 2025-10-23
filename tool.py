@@ -15,13 +15,14 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 from rich.theme import Theme
 
-from backend.src.key import CONFIG_FILE, find_key
+from backend.src.key import KeyExtractor
 
 # Constants
 MAX_CACHE_SIZE = 30
 CACHE_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 WEIXIN_VERSIONS = ["3", "4"]
 DEFAULT_VERSION = "4"
+CONFIG_FILE = Path("config.json")
 
 # Theme configuration
 THEME = Theme(
@@ -93,7 +94,7 @@ class Config:
 class ConfigManager:
     """配置文件管理器"""
 
-    def __init__(self, config_file: str | Path = CONFIG_FILE):
+    def __init__(self, config_file: Path = CONFIG_FILE):
         self.config_file = Path(config_file)
 
     def load(self) -> Config:
@@ -167,8 +168,10 @@ class KeyManager:
         if not cache:
             return None, None
 
-        if not Confirm.ask("检测到已缓存的密钥，是否验证?", default=True):
+        if not Confirm.ask("检测到已缓存的密钥,是否验证?", default=True):
             return None, None
+
+        extractor = KeyExtractor(weixin_dir, version)
 
         for entry in cache:
             if not entry.xor or not entry.aes:
@@ -179,14 +182,12 @@ class KeyManager:
                     f"\n正在验证密钥 XOR: 0x{entry.xor:02X}, AES: {entry.aes[:16]}",
                     style="info",
                 )
-                xor_key, aes_key = find_key(
-                    weixin_dir,
-                    version=version,
+                keys = extractor.extract(
                     xor_key_=entry.xor,
                     aes_key_=entry.aes.encode()[:16],
                 )
-                console.print("✓ 密钥验证成功！", style="success")
-                return xor_key, entry.aes
+                console.print("✓ 密钥验证成功!", style="success")
+                return keys.xor_key, entry.aes
             except Exception as e:
                 console.print(f"✗ 该密钥验证失败: {e}", style="error")
                 continue
@@ -201,8 +202,9 @@ class KeyManager:
         """寻找新密钥"""
         try:
             console.print("正在寻找新密钥...", style="info")
-            xor_key, aes_key = find_key(weixin_dir, version=version)
-            return xor_key, aes_key
+            extractor = KeyExtractor(weixin_dir, version)
+            keys = extractor.extract()
+            return keys.xor_key, keys.aes_key
         except Exception as e:
             console.print(f"获取密钥失败: {e}", style="error")
             return None, None

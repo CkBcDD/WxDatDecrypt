@@ -1,11 +1,11 @@
 """src package"""
 
-from .decrypt import decrypt_dat
-from .key import find_key
-from .wxam import wxam_to_image
+from .decrypt import DatDecryptor
+from .key import KeyExtractor
+from .wxam import WxAMDecoder
 
 __all__ = [
-    "decrypt_dat",
-    "find_key",
-    "wxam_to_image",
+    "DatDecryptor",
+    "KeyExtractor",
+    "WxAMDecoder",
 ]

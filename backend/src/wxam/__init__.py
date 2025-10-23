@@ -1,5 +1,5 @@
 """wxam package"""
 
-from ._wxgf import wxam_to_image
+from ._wxgf import WxAMDecoder
 
-__all__ = ["wxam_to_image"]
+__all__ = ["WxAMDecoder"]

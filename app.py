@@ -16,8 +16,8 @@ from typing import Final, Protocol
 
 import webview
 
-from backend.src.decrypt import decrypt_dat
-from backend.src.wxam import wxam_to_image
+from backend.src.decrypt import DatDecryptor
+from backend.src.wxam import WxAMDecoder
 
 
 # ==================== 常量配置 ====================
@@ -248,7 +248,9 @@ class DatFileDecryptor:
 
         try:
             aes_key = keys.aes_key_trimmed if keys.aes_key else None
-            version, data = decrypt_dat(file_path, keys.xor_key, aes_key)
+            # DatDecryptor.decrypt is an instance method; create an instance before calling.
+            decryptor = DatDecryptor()
+            version, data = decryptor.decrypt(file_path, keys.xor_key, aes_key)
             self.logger.info(f"解密成功 - 版本: v{version}, 数据大小: {len(data)} 字节")
         except ValueError as e:
             self.logger.error(f"解密失败: {e}")
@@ -262,7 +264,8 @@ class DatFileDecryptor:
         # 处理 WxGF 格式
         if data.startswith(b"wxgf"):
             self.logger.info("检测到 WxGF 格式，开始转换...")
-            converted_data = wxam_to_image(data)
+            decoder = WxAMDecoder()
+            converted_data = decoder.decode(data)
             if converted_data is None:
                 raise ValueError("WxGF 转换失败")
             data = converted_data
