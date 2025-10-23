@@ -6,6 +6,7 @@ import { state, constants } from './state.js';
 import { detectMimeType, buildFilename } from './utils.js';
 import { openImageViewer } from './imageViewer.js';
 import { hideContextMenu, showContextMenu } from './contextMenu.js';
+import { handleCardClick, setupCardMultiSelect } from './multiSelect.js';
 
 export async function startImageLoading(folderPath) {
     if (state.isLoading) return;
@@ -131,8 +132,15 @@ function addImageToColumn(column) {
         imageGallery.appendChild(card);
     }
 
-    card.addEventListener('click', () => {
+    card.addEventListener('click', (event) => {
         hideContextMenu();
+
+        // 处理多选模式
+        if (handleCardClick(card, event)) {
+            return; // 多选模式已处理，不打开查看器
+        }
+
+        // 原有的查看器逻辑
         if (card.classList.contains('is-loading')) return;
         const base64Data = card.dataset.base64 || img.dataset.base64;
         if (!base64Data) return;
@@ -156,6 +164,9 @@ function addImageToColumn(column) {
         };
         showContextMenu(event.clientX, event.clientY);
     });
+
+    // 设置多选支持
+    setupCardMultiSelect(card);
 
     fetchAndSetImage(relPath, img);
 }

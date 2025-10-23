@@ -3,7 +3,6 @@
  * @author WxDatDecrypt Team
  */
 
-import { state } from './state.js';
 import { debounce } from './utils.js';
 import { loadAndRenderDirectoryTree, selectTreeNode } from './directoryTree.js';
 import { rebuildLayout } from './gallery.js';
@@ -19,6 +18,13 @@ import {
 } from './imageViewer.js';
 import { hideContextMenu, handleContextMenuAction } from './contextMenu.js';
 import { updateLayoutIcon, switchView } from './layout.js';
+import {
+    toggleMultiSelectMode,
+    selectAll,
+    batchSaveSelected,
+    clearSelection
+} from './multiSelect.js';
+import { state } from './state.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // DOM 元素引用
@@ -39,6 +45,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const viewerImage = document.getElementById('viewer-image');
     const contextMenu = document.getElementById('image-context-menu');
     const scrollContainer = document.querySelector('.gallery-scroll-container');
+    const multiSelectBtn = document.getElementById('multi-select-btn');
+    const batchSaveBtn = document.getElementById('batch-save-btn');
 
     // 事件监听器
     homeBtn.addEventListener('click', () => switchView('home'));
@@ -128,9 +136,28 @@ document.addEventListener('DOMContentLoaded', () => {
     scrollContainer?.addEventListener('scroll', hideContextMenu);
     window.addEventListener('resize', hideContextMenu);
 
+    // 多选按钮事件
+    multiSelectBtn?.addEventListener('click', toggleMultiSelectMode);
+
+    // 批量保存按钮事件
+    batchSaveBtn?.addEventListener('click', batchSaveSelected);
+
     // 键盘事件
     document.addEventListener('keydown', (event) => {
+        // Ctrl+A 全选
+        if ((event.ctrlKey || event.metaKey) && event.key === 'a' && state.isMultiSelectMode) {
+            event.preventDefault();
+            selectAll();
+            return;
+        }
+
         if (event.key === 'Escape') {
+            // 如果在多选模式，先退出多选
+            if (state.isMultiSelectMode) {
+                toggleMultiSelectMode();
+                return;
+            }
+
             if (contextMenu && !contextMenu.classList.contains('hidden')) {
                 hideContextMenu();
                 return;
@@ -143,4 +170,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 初始化
     switchView('home');
+
+    // 切换视图时清除多选状态
+    const originalSwitchView = switchView;
+    window.switchView = (viewName) => {
+        if (state.isMultiSelectMode && viewName !== 'folder') {
+            toggleMultiSelectMode();
+        }
+        originalSwitchView(viewName);
+    };
 });

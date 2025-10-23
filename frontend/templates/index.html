@@ -494,6 +494,16 @@
                         <div id="breadcrumb-container">
                             <fluent-breadcrumb id="breadcrumb" aria-label="当前位置"></fluent-breadcrumb>
                             <div style="margin-left: auto; display: flex; gap: 8px; align-items: center;">
+                                <!-- 多选按钮 -->
+                                <fluent-button id="multi-select-btn" appearance="stealth" title="多选模式"
+                                    aria-label="切换多选模式">
+                                    多选
+                                </fluent-button>
+                                <!-- 批量保存按钮 (多选模式下显示) -->
+                                <fluent-button id="batch-save-btn" appearance="accent" class="hidden" title="保存选中的图片"
+                                    aria-label="保存选中的图片">
+                                    保存选中 (<span id="selected-count">0</span>)
+                                </fluent-button>
                                 <fluent-text>布局:</fluent-text>
                                 <!-- Layout toggle button. -->
                                 <fluent-button id="layout-toggle-btn" appearance="stealth" title="切换布局模式"

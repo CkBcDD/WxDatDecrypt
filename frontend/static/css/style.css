@@ -537,3 +537,88 @@ main {
 .context-menu fluent-button::part(control) {
     width: 100%;
 }
+
+/* ========================================================================
+   Multi-Select Mode Styles
+   ======================================================================== */
+
+/**
+ * Multi-select mode button active state.
+ */
+#multi-select-btn.active {
+    background-color: var(--error-color, #c50f1f);
+    color: white;
+}
+
+/**
+ * Checkbox overlay for image cards in multi-select mode.
+ */
+.image-card .checkbox-overlay {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 24px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 2px solid #d1d1d1;
+    border-radius: 4px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+}
+
+/**
+ * Show checkbox in multi-select mode.
+ */
+.multi-select-mode .image-card .checkbox-overlay {
+    display: flex;
+}
+
+/**
+ * Checkbox checked state.
+ */
+.image-card.selected .checkbox-overlay {
+    background: #0078d4;
+    border-color: #0078d4;
+}
+
+/**
+ * Checkmark icon.
+ */
+.image-card.selected .checkbox-overlay::after {
+    content: '✓';
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+/**
+ * Selected card highlight.
+ */
+.image-card.selected {
+    outline: 3px solid #0078d4;
+    outline-offset: -3px;
+}
+
+/**
+ * Prevent text selection during multi-select.
+ */
+.multi-select-mode .image-card {
+    user-select: none;
+}
+
+/**
+ * Image card positioning for checkbox overlay.
+ */
+.image-card {
+    position: relative;
+}
+
+/**
+ * Hidden utility class.
+ */
+.hidden {
+    display: none !important;
+}

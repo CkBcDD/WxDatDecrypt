@@ -19,7 +19,10 @@ export const state = {
     viewerCurrentBase64: '',
     viewerCurrentMimeType: 'image/jpeg',
     viewerCurrentFilename: 'image.jpg',
-    contextMenuPayload: null
+    contextMenuPayload: null,
+    isMultiSelectMode: false,
+    selectedCards: new Set(),
+    lastSelectedIndex: -1
 };
 
 export const constants = {
