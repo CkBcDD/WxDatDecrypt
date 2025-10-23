@@ -339,32 +339,6 @@ class DatDecryptor:
         return decrypted_data + raw_data + xor_array.tobytes()
 
 
-# 便利函数 (向后兼容)
-def decrypt_dat(
-    input_file: str | Path,
-    xor_key: int,
-    aes_key: bytes | None = None,
-) -> tuple[int, bytes]:
-    """
-    自动识别 .dat 文件版本并解密
-
-    Args:
-        input_file: 输入的 .dat 文件路径
-        xor_key: XOR 解密密钥
-        aes_key: AES 解密密钥 (仅 v2 需要)
-
-    Returns:
-        tuple[int, bytes]: (版本号, 解密后的数据)
-
-    Example:
-        >>> version, data = decrypt_dat("image.dat", 0xFF)
-        >>> print(f"Version: {version}, Size: {len(data)}")
-    """
-    decryptor = DatDecryptor()
-    result = decryptor.decrypt(input_file, xor_key, aes_key)
-    return result.version.value, result.data
-
-
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,

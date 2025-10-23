@@ -11,7 +11,7 @@ import os
 import re
 import threading
 from collections import Counter
-from ctypes import WinDLL, Structure, POINTER, c_void_p, c_ulong, c_size_t, c_bool
+from ctypes import Structure, c_void_p, c_ulong, c_size_t
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional, NamedTuple
@@ -246,7 +246,7 @@ class YaraRuleManager:
 
     @staticmethod
     @lru_cache(maxsize=1)
-    def load_rules() -> yara.Rules:
+    def _load_rules() -> yara.Rules:
         """加载 YARA 规则"""
         return yara.compile(source=YaraRuleManager.YARA_RULE_SOURCE)
 
@@ -263,7 +263,7 @@ class YaraRuleManager:
             AES 密钥,未找到则返回 None
         """
         try:
-            rules = YaraRuleManager.load_rules()
+            rules = YaraRuleManager._load_rules()
             logger.info(f"开始在进程 {pid} 中扫描 AES 密钥...")
 
             matches = rules.match(pid=pid)
@@ -386,7 +386,7 @@ class KeyExtractor:
         self.process_manager = WechatProcessManager()
         logger.info(f"初始化 KeyExtractor (版本 {version})")
 
-    def extract_xor_key(self) -> int:
+    def _extract_xor_key(self) -> int:
         """
         提取 XOR 密钥
 
@@ -425,7 +425,7 @@ class KeyExtractor:
         else:
             raise RuntimeError("未能找到有效的 XOR 密钥")
 
-    def extract_aes_key(self) -> bytes:
+    def _extract_aes_key(self) -> bytes:
         """
         提取 AES 密钥
 
@@ -486,7 +486,7 @@ class KeyExtractor:
         """
         logger.info(f"微信版本 {self.version}, 开始读取文件并收集密钥...")
 
-        xor_key = self.extract_xor_key()
+        xor_key = self._extract_xor_key()
 
         # 验证已知的 XOR 密钥
         if xor_key_ is not None:
@@ -494,7 +494,7 @@ class KeyExtractor:
                 raise RuntimeError("XOR 密钥验证失败")
             logger.info("XOR 密钥验证成功")
 
-        aes_key = self.extract_aes_key()
+        aes_key = self._extract_aes_key()
 
         # 验证已知的 AES 密钥
         if aes_key_ is not None:

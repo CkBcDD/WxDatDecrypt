@@ -248,7 +248,7 @@ class DatFileDecryptor:
 
         try:
             aes_key = keys.aes_key_trimmed if keys.aes_key else None
-            # DatDecryptor.decrypt is an instance method; create an instance before calling.
+
             decryptor = DatDecryptor()
             version, data = decryptor.decrypt(file_path, keys.xor_key, aes_key)
             self.logger.info(f"解密成功 - 版本: v{version}, 数据大小: {len(data)} 字节")
