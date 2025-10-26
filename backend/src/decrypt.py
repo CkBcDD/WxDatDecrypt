@@ -177,8 +177,7 @@ class DatDecryptor:
             raise InvalidKeyError("AES key must be bytes")
         if len(aes_key) != self.config.AES_KEY_SIZE:
             raise InvalidKeyError(
-                f"AES key must be {self.config.AES_KEY_SIZE} bytes, "
-                f"got {len(aes_key)}"
+                f"AES key must be {self.config.AES_KEY_SIZE} bytes, got {len(aes_key)}"
             )
 
     def _decrypt_v0(self, path: Path, xor_key: int) -> bytes:

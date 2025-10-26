@@ -17,6 +17,7 @@ from typing import Final, Protocol
 import webview
 
 from backend.src.decrypt import DatDecryptor
+from backend.src.key import KeyExtractor
 from backend.src.wxam import WxAMDecoder
 
 
@@ -168,6 +169,10 @@ class ConfigReader(Protocol):
         """读取加密密钥。"""
         ...
 
+    def write_keys(self, keys: EncryptionKeys) -> bool:
+        """写入加密密钥。"""
+        ...
+
 
 class FileDecryptor(Protocol):
     """文件解密器接口。"""
@@ -219,6 +224,41 @@ class JsonConfigReader:
         except (OSError, json.JSONDecodeError, ValueError, TypeError) as e:
             self.logger.error(f"读取配置文件失败: {e}", exc_info=True)
             return EncryptionKeys()
+
+    def write_keys(self, keys: EncryptionKeys) -> bool:
+        """将密钥写入配置文件。"""
+        try:
+            aes_value = keys.aes_key.decode()
+        except UnicodeDecodeError as e:
+            self.logger.error(
+                f"写入配置文件失败: AES 密钥解码失败 - {e}", exc_info=True
+            )
+            return False
+
+        try:
+            data = {}
+            if self.config_file.exists():
+                raw = self.config_file.read_text(encoding="utf-8")
+                loaded = json.loads(raw) if raw else {}
+                if isinstance(loaded, dict):
+                    data.update(loaded)
+
+            data["xor"] = keys.xor_key
+            data["aes"] = aes_value
+            self.config_file.parent.mkdir(parents=True, exist_ok=True)
+            self.config_file.write_text(
+                json.dumps(data, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            self.logger.info(
+                "密钥已写入配置文件: XOR=0x%02X, AES长度=%d",
+                keys.xor_key,
+                len(aes_value),
+            )
+            return True
+        except (OSError, ValueError, TypeError) as e:
+            self.logger.error(f"写入配置文件失败: {e}", exc_info=True)
+            return False
 
 
 class DatFileDecryptor:
@@ -503,6 +543,47 @@ class WeixinViewerApi:
         except (OSError, ValueError) as e:
             self.logger.error(f"保存文件失败: {e}", exc_info=True)
             return ApiResponse(success=False, error=f"写入文件失败: {e}").to_dict()
+
+    def extract_keys(self, version: int = 4) -> dict:
+        """提取并保存微信密钥。"""
+        if not self.app_state.is_initialized() or self.app_state.weixin_dir is None:
+            return ApiResponse(success=False, error="请先选择微信目录").to_dict()
+
+        if version not in (3, 4):
+            return ApiResponse(success=False, error="微信版本必须为 3 或 4").to_dict()
+
+        try:
+            extractor = KeyExtractor(self.app_state.weixin_dir, version)
+            keys = extractor.extract()
+            aes_str = keys.aes_key.decode()
+        except UnicodeDecodeError:
+            return ApiResponse(success=False, error="AES 密钥解码失败").to_dict()
+        except Exception as e:
+            self.logger.error(f"密钥提取失败: {e}", exc_info=True)
+            return ApiResponse(success=False, error=f"密钥提取失败: {e}").to_dict()
+
+        encryption_keys = EncryptionKeys(
+            xor_key=keys.xor_key,
+            aes_key=keys.aes_key,
+        )
+        self.app_state.keys = encryption_keys
+
+        if not self.config_reader.write_keys(encryption_keys):
+            return ApiResponse(success=False, error="写入配置文件失败").to_dict()
+
+        self.logger.info(
+            "密钥提取成功: XOR=0x%02X, AES长度=%d",
+            keys.xor_key,
+            len(aes_str),
+        )
+        response = ApiResponse(
+            success=True,
+            data={
+                "xor": keys.xor_key,
+                "aes": aes_str,
+            },
+        ).to_dict()
+        return response
 
 
 # ==================== 工具函数 ====================

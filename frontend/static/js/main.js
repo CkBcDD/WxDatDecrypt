@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const homeBtn = document.getElementById('home-btn');
     const folderBtn = document.getElementById('folder-btn');
     const selectFolderBtn = document.getElementById('select-folder-btn');
+    const extractKeysBtn = document.getElementById('extract-keys-btn');
     const currentFolderInfo = document.getElementById('current-folder-info');
     const layoutToggleBtn = document.getElementById('layout-toggle-btn');
     const dirTree = document.getElementById('dir-tree');
@@ -62,10 +63,43 @@ document.addEventListener('DOMContentLoaded', () => {
     selectFolderBtn.addEventListener('click', async () => {
         const result = await window.pywebview.api.open_folder_dialog();
         if (result?.success) {
-            state.currentRootDir = result.path;
+            state.currentRootDir = result?.data?.path ?? result?.path ?? state.currentRootDir;
             currentFolderInfo.textContent = `当前目录: ${state.currentRootDir}`;
             await loadAndRenderDirectoryTree(dirTree);
             switchView('folder');
+        }
+    });
+
+    extractKeysBtn?.addEventListener('click', async () => {
+        if (!state.currentRootDir) {
+            alert('请先选择根目录。');
+            return;
+        }
+
+        const input = prompt('请输入微信版本 (3 或 4)', '4');
+        if (!input) return;
+
+        const version = Number.parseInt(input, 10);
+        if (![3, 4].includes(version)) {
+            alert('版本号无效，请输入 3 或 4。');
+            return;
+        }
+
+        try {
+            const response = await window.pywebview.api.extract_keys(version);
+            if (!response?.success) {
+                alert(response?.error ?? '密钥提取失败。');
+                return;
+            }
+
+            const xorValue = response?.data?.xor ?? response?.xor;
+            const aesValue = response?.data?.aes ?? response?.aes;
+            alert(
+                `密钥提取成功！\nXOR: 0x${Number(xorValue ?? 0).toString(16).toUpperCase()}\nAES: ${(aesValue ?? '').slice(0, 32)}`
+            );
+        } catch (error) {
+            console.error('extractKeysBtn: 提取密钥失败', error);
+            alert('密钥提取失败。');
         }
     });
 
